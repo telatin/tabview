@@ -16,8 +16,9 @@ jobs:
 
     - name: Setup Nim
       uses: nim-lang/setup-nim-action@v1
-      with:
-        nim-version: '2.0.0'
+
+    - name: Set Nim version
+      run: choosenim 2.0.0
 
     - name: Install dependencies
       run: nimble install -d --accept
