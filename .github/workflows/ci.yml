@@ -24,7 +24,7 @@ jobs:
       run: nimble install --depsOnly --accept
 
     - name: Build
-      run: nimble build --accept
+      run: nimble build 
 
     - name: Run help command
       run: ./bin/tableview --help
