@@ -373,12 +373,22 @@ proc renderTable(ctx: var nw.Context[State]) =
       let scheme = ctx.data.colorScheme
       var isSearchMatch = false
       if ctx.data.searchPattern.len > 0 and cell.toLower().contains(ctx.data.searchPattern.toLower()):
-        isSearchMatch = true
+        if ctx.data.searchInColumn:
+          # Only highlight if we're in the active column
+          if isActiveCol:
+            isSearchMatch = true
+        else:
+          # Highlight matches in all columns
+          isSearchMatch = true
 
       if isActiveCell:
         # Active cell (intersection of active row and column) - most prominent
         iw.setBackgroundColor(ctx.tb, scheme.activeCellBg)
         iw.setForegroundColor(ctx.tb, scheme.activeCellFg)
+      elif isSearchMatch:
+        # Search match - should be prominent to see results
+        iw.setBackgroundColor(ctx.tb, iw.bgYellow)
+        iw.setForegroundColor(ctx.tb, iw.fgBlack)
       elif isActiveRow:
         # Active row - highlighted
         iw.setBackgroundColor(ctx.tb, scheme.activeRowBg)
@@ -387,9 +397,6 @@ proc renderTable(ctx: var nw.Context[State]) =
         # Active column - subtle highlight
         iw.setBackgroundColor(ctx.tb, scheme.activeColBg)
         iw.setForegroundColor(ctx.tb, scheme.activeColFg)
-      elif isSearchMatch:
-        iw.setBackgroundColor(ctx.tb, iw.bgYellow)
-        iw.setForegroundColor(ctx.tb, iw.fgBlack)
       else:
         # Alternate row colors for better readability
         if rowIdx mod 2 == 0:
