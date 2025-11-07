@@ -21,10 +21,10 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install dependencies
-      run: nimble install -d --accept
+      run: nimble install --depsOnly --accept
 
     - name: Build
-      run: nimble build -d --accept
+      run: nimble build --accept
 
     - name: Run help command
       run: ./bin/tableview --help
