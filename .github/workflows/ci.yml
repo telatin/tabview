@@ -23,6 +23,9 @@ jobs:
     - name: Install dependencies
       run: nimble install --depsOnly --accept
 
+    - name: Install libpcre3-dev
+      run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
+
     - name: Build
       run: nimble build 
 
