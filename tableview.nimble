@@ -1,11 +1,12 @@
 # Package
 
 version       = "0.1.0"
-author        = "Your Name"
+author        = "Andrea Telatin"
 description   = "TUI application for viewing TSV/CSV files"
 license       = "MIT"
 srcDir        = "src"
 bin           = @["tableview"]
+binDir        = "bin"
 
 # Dependencies
 
