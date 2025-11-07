@@ -16,6 +16,8 @@ jobs:
 
     - name: Setup Nim
       uses: nim-lang/setup-nim-action@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set Nim version
       run: choosenim 2.0.0
