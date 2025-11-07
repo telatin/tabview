@@ -1,0 +1,29 @@
+
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Nim
+      uses: nim-lang/setup-nim-action@v1
+      with:
+        nim-version: '2.0.0'
+
+    - name: Install dependencies
+      run: nimble install -d --accept
+
+    - name: Build
+      run: nimble build -d --accept
+
+    - name: Run help command
+      run: ./bin/tableview --help
