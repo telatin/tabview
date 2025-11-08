@@ -24,6 +24,7 @@ type
     evenRowBg: iw.BackgroundColor
     oddRowBg: iw.BackgroundColor
     normalFg: iw.ForegroundColor
+    screenBg: iw.BackgroundColor  # Background for non-rendered screen areas
 
   InputMode = enum
     imNormal, imCommand, imSearch, imSearchColumn, imFilter, imGraph
@@ -42,6 +43,7 @@ type
     activeCol: int  # Current/focused column (0-based)
     statusMessage: string
     colorScheme: ColorScheme
+    currentSchemeName: string  # Track current color scheme name for rotation
     inputMode: InputMode
     inputBuffer: string
     searchPattern: string
@@ -54,55 +56,190 @@ type
     regexSearch: bool
     graphData: seq[GraphEntry]
     graphColumnName: string
-    graphScrollY: int
+    graphScrollY: int# Safer, explicit color schemes for an illwill-style TUI table viewer.
+# All entries avoid bgNone/fgDefault so they look consistent across terminals.
 
-# Define color schemes
 let ColorSchemesTable = {
-  "default": ColorScheme(
-    activeCellBg: iw.bgWhite,
-    activeCellFg: iw.fgBlack,
-    activeRowBg: iw.bgNone,
-    activeRowFg: iw.fgYellow,
-    activeColBg: iw.bgNone,
-    activeColFg: iw.fgCyan,
-    evenRowBg: iw.bgNone,
-    oddRowBg: iw.bgNone,
-    normalFg: iw.fgWhite
-  ),
-  "bold": ColorScheme(
+  # --- Improved originals (avoid defaults) ---
+  "default": ColorScheme(           # classic dark
     activeCellBg: iw.bgYellow,
     activeCellFg: iw.fgBlack,
-    activeRowBg: iw.bgBlue,
-    activeRowFg: iw.fgWhite,
-    activeColBg: iw.bgMagenta,
-    activeColFg: iw.fgWhite,
-    evenRowBg: iw.bgNone,
-    oddRowBg: iw.bgBlack,
-    normalFg: iw.fgWhite
+    activeRowBg:  iw.bgBlue,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgCyan,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlack,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
   ),
-  "subtle": ColorScheme(
+  "bold": ColorScheme(              # high-saturation dark
+    activeCellBg: iw.bgYellow,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgMagenta,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlue,
+    activeColFg:  iw.fgWhite,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlue,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
+  ),
+  "subtle": ColorScheme(            # low-contrast but explicit
     activeCellBg: iw.bgBlack,
     activeCellFg: iw.fgWhite,
-    activeRowBg: iw.bgNone,
-    activeRowFg: iw.fgWhite,
-    activeColBg: iw.bgNone,
-    activeColFg: iw.fgWhite,
-    evenRowBg: iw.bgNone,
-    oddRowBg: iw.bgNone,
-    normalFg: iw.fgWhite
+    activeRowBg:  iw.bgBlue,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgWhite,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlack,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
   ),
-  "dark": ColorScheme(
+  "dark": ColorScheme(              # cyan accent dark
     activeCellBg: iw.bgCyan,
     activeCellFg: iw.fgBlack,
-    activeRowBg: iw.bgBlack,
-    activeRowFg: iw.fgCyan,
-    activeColBg: iw.bgBlack,
-    activeColFg: iw.fgCyan,
-    evenRowBg: iw.bgNone,
-    oddRowBg: iw.bgBlack,
-    normalFg: iw.fgWhite
+    activeRowBg:  iw.bgBlack,
+    activeRowFg:  iw.fgCyan,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgCyan,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlue,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
+  ),
+
+  # --- New dark schemes ---
+  "highContrastDark": ColorScheme(
+    activeCellBg: iw.bgYellow,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgRed,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgYellow,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlack,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
+  ),
+  "oneDarkish": ColorScheme(        # Atom One Dark-ish via ANSI
+    activeCellBg: iw.bgBlue,
+    activeCellFg: iw.fgWhite,
+    activeRowBg:  iw.bgMagenta,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgCyan,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlue,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
+  ),
+  "nordish": ColorScheme(           # Nord-ish via ANSI
+    activeCellBg: iw.bgCyan,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgBlue,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgCyan,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlack,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
+  ),
+  "gruvboxDarkish": ColorScheme(    # Gruvbox dark-ish via ANSI
+    activeCellBg: iw.bgYellow,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgBlue,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgYellow,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlue,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
+  ),
+  "matrix": ColorScheme(            # green-on-black vibes
+    activeCellBg: iw.bgGreen,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgBlack,
+    activeRowFg:  iw.fgGreen,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgGreen,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlack,
+    normalFg:     iw.fgGreen,
+    screenBg:     iw.bgBlack
+  ),
+
+  # --- New light schemes ---
+  "light": ColorScheme(
+    activeCellBg: iw.bgBlue,
+    activeCellFg: iw.fgWhite,
+    activeRowBg:  iw.bgCyan,
+    activeRowFg:  iw.fgBlack,
+    activeColBg:  iw.bgWhite,
+    activeColFg:  iw.fgBlue,
+    evenRowBg:    iw.bgWhite,
+    oddRowBg:     iw.bgWhite,
+    normalFg:     iw.fgBlack,
+    screenBg:     iw.bgWhite
+  ),
+  "highContrastLight": ColorScheme(
+    activeCellBg: iw.bgBlack,
+    activeCellFg: iw.fgWhite,
+    activeRowBg:  iw.bgYellow,
+    activeRowFg:  iw.fgBlack,
+    activeColBg:  iw.bgWhite,
+    activeColFg:  iw.fgBlack,
+    evenRowBg:    iw.bgWhite,
+    oddRowBg:     iw.bgWhite,
+    normalFg:     iw.fgBlack,
+    screenBg:     iw.bgWhite
+  ),
+  "solarizedLightish": ColorScheme( # approximate via ANSI
+    activeCellBg: iw.bgYellow,      # base2-ish
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgCyan,        # cyan accent
+    activeRowFg:  iw.fgBlack,
+    activeColBg:  iw.bgWhite,
+    activeColFg:  iw.fgBlue,
+    evenRowBg:    iw.bgWhite,
+    oddRowBg:     iw.bgWhite,
+    normalFg:     iw.fgBlack,
+    screenBg:     iw.bgWhite
+  ),
+  "gruvboxLightish": ColorScheme(
+    activeCellBg: iw.bgYellow,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgMagenta,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgWhite,
+    activeColFg:  iw.fgYellow,
+    evenRowBg:    iw.bgWhite,
+    oddRowBg:     iw.bgWhite,
+    normalFg:     iw.fgBlack,
+    screenBg:     iw.bgWhite
+  ),
+
+  # --- Monochrome / safe fallback ---
+  "mono": ColorScheme(              # minimal risk across themes
+    activeCellBg: iw.bgWhite,
+    activeCellFg: iw.fgBlack,
+    activeRowBg:  iw.bgBlack,
+    activeRowFg:  iw.fgWhite,
+    activeColBg:  iw.bgBlack,
+    activeColFg:  iw.fgWhite,
+    evenRowBg:    iw.bgBlack,
+    oddRowBg:     iw.bgBlack,
+    normalFg:     iw.fgWhite,
+    screenBg:     iw.bgBlack
   )
 }.toTable
+
+
+# Color scheme names for rotation
+const ColorSchemeNames = ["default", "bold", "subtle", "dark", "mono", "highContrastLight"]
 
 include nimwave/prelude
 
@@ -113,9 +250,11 @@ proc init(ctx: var nw.Context[State], filename: string, schemeName: string,
   # Select color scheme early, before terminal setup
   if ColorSchemesTable.hasKey(schemeName):
     ctx.data.colorScheme = ColorSchemesTable[schemeName]
+    ctx.data.currentSchemeName = schemeName
   else:
     echo "Warning: Color scheme '", schemeName, "' not found. Using 'default'."
     ctx.data.colorScheme = ColorSchemesTable["default"]
+    ctx.data.currentSchemeName = "default"
 
   # Parse the data BEFORE initializing the TUI
   if fromStdin:
@@ -197,6 +336,21 @@ proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y:
 
   iw.write(ctx.tb, x, y, displayText)
 
+proc fillScreenBackground(ctx: var nw.Context[State]) =
+  ## Fill the entire screen with the screenBg color
+  let termWidth = iw.width(ctx.tb)
+  let termHeight = iw.height(ctx.tb)
+  let scheme = ctx.data.colorScheme
+
+  iw.setBackgroundColor(ctx.tb, scheme.screenBg)
+  iw.setForegroundColor(ctx.tb, scheme.normalFg)
+
+  for y in 0 ..< termHeight:
+    for x in 0 ..< termWidth:
+      iw.write(ctx.tb, x, y, " ")
+
+  iw.resetAttributes(ctx.tb)
+
 proc applyFilter(ctx: var nw.Context[State]) =
   ## Apply the current searchPattern as a filter
   ctx.data.filteredRows = @[]
@@ -266,6 +420,9 @@ proc generateGraphData(ctx: var nw.Context[State]) =
   ctx.data.graphScrollY = 0
 
 proc renderTable(ctx: var nw.Context[State]) =
+  # Fill the entire screen with the background color first
+  fillScreenBackground(ctx)
+
   let data = ctx.data.tableData
   let termWidth = iw.width(ctx.tb)
   let termHeight = iw.height(ctx.tb)
@@ -431,6 +588,9 @@ proc renderTable(ctx: var nw.Context[State]) =
 
 proc renderGraphView(ctx: var nw.Context[State]) =
   ## Render the graph/statistics view for the active column
+  # Fill the entire screen with the background color first
+  fillScreenBackground(ctx)
+
   let termWidth = iw.width(ctx.tb)
   let termHeight = iw.height(ctx.tb)
   let contentHeight = termHeight - 1  # Reserve last line for status
@@ -692,6 +852,16 @@ proc searchPrev(ctx: var nw.Context[State]): bool =
           return true
 
   return false
+
+proc rotateColorScheme(ctx: var nw.Context[State]) =
+  ## Rotate to the next color scheme
+  let currentIdx = ColorSchemeNames.find(ctx.data.currentSchemeName)
+  let nextIdx = (currentIdx + 1) mod ColorSchemeNames.len
+  let nextSchemeName = ColorSchemeNames[nextIdx]
+
+  ctx.data.currentSchemeName = nextSchemeName
+  ctx.data.colorScheme = ColorSchemesTable[nextSchemeName]
+  ctx.data.statusMessage = "Color scheme: " & nextSchemeName
 
 proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
   ## Handle keyboard input. Returns true if should quit.
@@ -995,6 +1165,10 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
     # Enter graph view for active column
     generateGraphData(ctx)
     ctx.data.inputMode = imGraph
+
+  of iw.Key.Tab:
+    # Rotate to next color scheme
+    rotateColorScheme(ctx)
 
   of iw.Key(ord('q')), iw.Key(ord('Q')):
     return true
