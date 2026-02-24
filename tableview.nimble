@@ -1,11 +1,11 @@
 # Package
 
-version       = "0.2.0"
+version       = "0.3.0"
 author        = "Andrea Telatin"
-description   = "TUI application for viewing TSV/CSV files"
+description   = "TUI table viewer library with interactive sort, search, filter and graph"
 license       = "MIT"
 srcDir        = "src"
-bin           = @["tableview"]
+namedBin      = {"tableview": "tableview", "wordcount_demo": "wordcount"}.toTable()
 binDir        = "bin"
 
 # Dependencies
