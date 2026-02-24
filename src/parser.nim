@@ -1,4 +1,4 @@
-## Parsing module for tabview.
+## Parsing module for tableview.
 ##
 ## Provides CSV/TSV ingestion from files or streams, column-type detection,
 ## and the core `TableData` structure used throughout the application.

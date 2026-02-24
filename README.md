@@ -1,12 +1,12 @@
-# tabview
+# tableview
 
 A Nim library for interactive TUI table viewing, with two demo binaries bundled.
-Other tools can embed the viewer by importing `tabview` and calling `viewTable` or `viewTabularFile`.
+Other tools can embed the viewer by importing `tableview` and calling `viewTable` or `viewTabularFile`.
 
 ## Library API
 
 ```nim
-import tabview
+import tableview
 
 # View an in-memory table (e.g. output of your own tool)
 viewTable(data: TableData, schemeName = "default", filename = "", hasHeader = true)
@@ -19,7 +19,7 @@ viewTabularFile(path: string, schemeName = "default", delimiter = '\0',
 ### Building a `TableData` yourself
 
 ```nim
-import tabview
+import tableview
 
 var data = TableData(
   headers:      @["Name", "Score", "Grade"],
@@ -35,7 +35,7 @@ viewTable(data, filename = "my tool output")
 ### Example: tool with optional `--view-table` flag
 
 ```nim
-import tabview
+import tableview
 
 # ... build `data: TableData` from your tool's output ...
 

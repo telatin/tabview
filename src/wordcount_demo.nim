@@ -2,7 +2,7 @@ import os
 import strutils
 import unicode
 import argparse
-import tabview
+import tableview
 
 when defined(posix):
   import posix
@@ -44,7 +44,7 @@ proc main() =
   var p = newParser("wordcount"):
     help("Count lines, words and characters in files")
     arg("paths", nargs = -1, help = "Files to process (use '-' for stdin)")
-    flag("-t", "--table", help = "Show results interactively with tabview")
+    flag("-t", "--table", help = "Show results interactively with tableview")
     flag("-s", "--summary-row", help = "Add a totals row when multiple files are given")
 
   try:
