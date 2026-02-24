@@ -1,3 +1,16 @@
+## TUI table-viewer library for tabview.
+##
+## Exports the public API for embedding the interactive viewer in other Nim
+## programs:
+##
+## - `viewTable <#viewTable,TableData,string,string,bool>`_ – launch the viewer
+##   with an already-parsed `TableData` value.
+## - `viewTabularFile <#viewTabularFile,string,string,char,int,string,bool,int>`_
+##   – launch the viewer directly from a file path or ``"-"`` for stdin.
+##
+## The `TableData`, `ColumnType`, and parser procedures from `parser`_ are
+## re-exported so callers only need to import this module.
+
 import os
 import terminal
 import unicode

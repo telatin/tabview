@@ -1,17 +1,26 @@
+## Parsing module for tabview.
+##
+## Provides CSV/TSV ingestion from files or streams, column-type detection,
+## and the core `TableData` structure used throughout the application.
+
 import strutils
 import unicode
 import streams
 
 type
   ColumnType* = enum
-    ctString, ctInt, ctFloat
+    ## Detected data type for a table column.
+    ctString ## Column contains arbitrary text values.
+    ctInt    ## All non-empty values parse as integers.
+    ctFloat  ## All non-empty values parse as floating-point numbers.
 
   TableData* = object
-    headers*: seq[string]
-    rows*: seq[seq[string]]
-    columnWidths*: seq[int]
-    columnTypes*: seq[ColumnType]
-    hiddenColumns*: seq[bool]
+    ## Holds the parsed contents of a delimited file.
+    headers*: seq[string]      ## Column header names (one per column).
+    rows*: seq[seq[string]]    ## Data rows; each inner seq has one field per column.
+    columnWidths*: seq[int]    ## Rendering widths (capped at `maxColWidth`) per column.
+    columnTypes*: seq[ColumnType] ## Detected type for each column.
+    hiddenColumns*: seq[bool]  ## Per-column visibility flag; `true` means hidden.
 
 proc detectColumnType(values: seq[string]): ColumnType =
   ## Detect the type of a column based on its values

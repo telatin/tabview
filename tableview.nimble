@@ -14,3 +14,7 @@ requires "nim >= 2.0.0"
 requires "nimwave"
 requires "illwave"
 requires "argparse"
+
+task docs, "Generate HTML documentation into docs/":
+  exec "nim doc --project --outdir:docs --index:on src/tabview.nim"
+  exec "cp docs/tabview.html docs/index.html"
