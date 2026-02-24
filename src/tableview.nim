@@ -27,7 +27,7 @@ type
     screenBg: iw.BackgroundColor  # Background for non-rendered screen areas
 
   InputMode = enum
-    imNormal, imCommand, imSearch, imSearchColumn, imFilter, imGraph
+    imNormal, imCommand, imSearch, imSearchColumn, imFilter, imGraph, imSaveFile, imSaveConfirm
 
   GraphEntry = object
     occurrence: string
@@ -56,7 +56,10 @@ type
     regexSearch: bool
     graphData: seq[GraphEntry]
     graphColumnName: string
-    graphScrollY: int# Safer, explicit color schemes for an illwill-style TUI table viewer.
+    graphScrollY: int
+    pendingSaveFile: string
+    statusMessageTTL: int   # ticks remaining to show a transient status message
+# Safer, explicit color schemes for an illwill-style TUI table viewer.
 # All entries avoid bgNone/fgDefault so they look consistent across terminals.
 
 let ColorSchemesTable = {
@@ -419,6 +422,43 @@ proc generateGraphData(ctx: var nw.Context[State]) =
 
   ctx.data.graphScrollY = 0
 
+proc saveTableToFile(ctx: var nw.Context[State], filename: string): string =
+  ## Save current table to file. Returns "" on success, error message on failure.
+  ## Writes all rows in current sort order with header; hidden columns are excluded.
+  ## Delimiter is inferred from the file extension (.csv → comma, anything else → tab).
+  let data = ctx.data.tableData
+  let (_, _, ext) = splitFile(filename)
+  let delimiter = if ext.toLower() == ".csv": ',' else: '\t'
+
+  var visibleCols: seq[int] = @[]
+  for i in 0 ..< data.headers.len:
+    if not data.hiddenColumns[i]:
+      visibleCols.add(i)
+
+  if visibleCols.len == 0:
+    return "No visible columns to save"
+
+  try:
+    let f = open(filename, fmWrite)
+    defer: f.close()
+
+    var headerFields: seq[string] = @[]
+    for colIdx in visibleCols:
+      headerFields.add(data.headers[colIdx])
+    f.writeLine(headerFields.join($delimiter))
+
+    for row in data.rows:
+      var fields: seq[string] = @[]
+      for colIdx in visibleCols:
+        fields.add(if colIdx < row.len: row[colIdx] else: "")
+      f.writeLine(fields.join($delimiter))
+
+    return ""
+  except IOError as e:
+    return "Error: " & e.msg
+  except Exception as e:
+    return "Error: " & e.msg
+
 proc renderTable(ctx: var nw.Context[State]) =
   # Fill the entire screen with the background color first
   fillScreenBackground(ctx)
@@ -579,6 +619,10 @@ proc renderTable(ctx: var nw.Context[State]) =
     statusLine = "|" & ctx.data.inputBuffer
   of imFilter:
     statusLine = "&" & ctx.data.inputBuffer
+  of imSaveFile:
+    statusLine = "Save to: " & ctx.data.inputBuffer
+  of imSaveConfirm:
+    statusLine = "Overwrite '" & ctx.data.pendingSaveFile & "'? (y/n)"
   of imNormal, imGraph:
     statusLine = ctx.data.statusMessage
 
@@ -902,7 +946,7 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
         applyFilter(ctx)
         ctx.data.activeRow = if ctx.data.filteredRows.len > 0: ctx.data.filteredRows[0] else: 0
 
-      of imNormal, imGraph:
+      of imNormal, imGraph, imSaveFile, imSaveConfirm:
         discard
 
       ctx.data.inputMode = imNormal
@@ -925,6 +969,55 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       if key.int >= 32 and key.int <= 126:
         ctx.data.inputBuffer.add(chr(key.int))
 
+    return false
+
+  # Handle save-file filename input
+  if ctx.data.inputMode == imSaveFile:
+    case key:
+    of iw.Key.Enter:
+      let target = ctx.data.inputBuffer
+      ctx.data.inputBuffer = ""
+      if target.len == 0:
+        ctx.data.statusMessage = "No filename given"
+        ctx.data.statusMessageTTL = 100
+        ctx.data.inputMode = imNormal
+      elif fileExists(target):
+        ctx.data.pendingSaveFile = target
+        ctx.data.inputMode = imSaveConfirm
+      else:
+        let err = saveTableToFile(ctx, target)
+        if err.len > 0:
+          ctx.data.statusMessage = err
+        else:
+          ctx.data.statusMessage = "Saved: " & target & " (" & $ctx.data.tableData.rows.len & " rows)"
+        ctx.data.statusMessageTTL = 200
+        ctx.data.inputMode = imNormal
+    of iw.Key.Escape:
+      ctx.data.inputMode = imNormal
+      ctx.data.inputBuffer = ""
+    of iw.Key.Backspace:
+      if ctx.data.inputBuffer.len > 0:
+        ctx.data.inputBuffer = ctx.data.inputBuffer[0 ..< ctx.data.inputBuffer.len - 1]
+    else:
+      if key.int >= 32 and key.int <= 126:
+        ctx.data.inputBuffer.add(chr(key.int))
+    return false
+
+  # Handle save overwrite confirmation
+  if ctx.data.inputMode == imSaveConfirm:
+    case key:
+    of iw.Key(ord('y')), iw.Key(ord('Y')):
+      let err = saveTableToFile(ctx, ctx.data.pendingSaveFile)
+      if err.len > 0:
+        ctx.data.statusMessage = err
+      else:
+        ctx.data.statusMessage = "Saved: " & ctx.data.pendingSaveFile & " (" & $ctx.data.tableData.rows.len & " rows)"
+      ctx.data.statusMessageTTL = 200
+    else:
+      ctx.data.statusMessage = "Save cancelled"
+      ctx.data.statusMessageTTL = 100
+    ctx.data.pendingSaveFile = ""
+    ctx.data.inputMode = imNormal
     return false
 
   # Handle graph mode
@@ -1170,6 +1263,10 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
     # Rotate to next color scheme
     rotateColorScheme(ctx)
 
+  of iw.Key(ord('s')):
+    ctx.data.inputMode = imSaveFile
+    ctx.data.inputBuffer = ""
+
   of iw.Key(ord('q')), iw.Key(ord('Q')):
     return true
 
@@ -1197,9 +1294,13 @@ proc tick(ctx: var nw.Context[State], prevTb: var iw.TerminalBuffer): bool =
     if handleInput(ctx, key):
       return true
 
-  # Update status message to reflect current position (only for normal mode)
-  if ctx.data.inputMode != imGraph:
-    updateStatusMessage(ctx)
+  # Update status message to reflect current position (only for normal mode,
+  # and only once any transient message TTL has expired)
+  if ctx.data.inputMode notin [imGraph, imSaveFile, imSaveConfirm]:
+    if ctx.data.statusMessageTTL > 0:
+      ctx.data.statusMessageTTL -= 1
+    else:
+      updateStatusMessage(ctx)
 
   # Render
   ctx.tb = iw.initTerminalBuffer(terminal.terminalWidth(), terminal.terminalHeight())

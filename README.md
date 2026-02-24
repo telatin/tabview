@@ -56,4 +56,4 @@ echo -e "Name\tAge\tCity\tCountry\nAlice\t30\tNew York\tUSA\nBob\t25\tLondon\tUK
 - nimwave - Cross-platform TUI framework
 - illwave - Low-level terminal library
 - argparse - Command-line argument parser
-# tabview
+

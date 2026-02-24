@@ -104,6 +104,16 @@ The table uses three levels of highlighting to show the active cell:
 
 This makes it easy to see the entire row and column context of your current position.
 
+## Save
+
+- `s` - Save the table to a file
+  - Status bar prompts "Save to: " — type a filename and press `Enter`
+  - Press `Escape` to cancel
+  - Delimiter is inferred from the filename extension: `.csv` → comma, anything else → tab
+  - All rows are written in the current sort order with the header row
+  - Hidden columns are excluded from the output
+  - If the file already exists, you will be asked "Overwrite? (y/n)" — press `y` to confirm or any other key to cancel
+
 ## Exit
 
 - `q` or `Q` - Quit the application
