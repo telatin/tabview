@@ -1,0 +1,9 @@
+nimTitle	parser	parser.html	module src/parser		0
+nim	ctString	parser.html#ctString	ColumnType.ctString		11
+nim	ctInt	parser.html#ctInt	ColumnType.ctInt		11
+nim	ctFloat	parser.html#ctFloat	ColumnType.ctFloat		11
+nim	ColumnType	parser.html#ColumnType	enum ColumnType		11
+nim	TableData	parser.html#TableData	object TableData		17
+nim	parseDelimitedFile	parser.html#parseDelimitedFile,string,char,int,string,bool,int	proc parseDelimitedFile(filename: string; delimiter: char = '\t'; skipLines: int = 0;\n                   skipPrefix: string = ""; hasHeader: bool = true;\n                   maxColWidth: int = 20): TableData		52
+nim	parseDelimitedStream	parser.html#parseDelimitedStream,Stream,char,int,string,bool,int	proc parseDelimitedStream(stream: Stream; delimiter: char = '\x00';\n                     skipLines: int = 0; skipPrefix: string = "";\n                     hasHeader: bool = true; maxColWidth: int = 20): TableData		116
+nim	detectDelimiter	parser.html#detectDelimiter,string	proc detectDelimiter(filename: string): char		194

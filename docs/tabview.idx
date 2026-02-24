@@ -1,0 +1,12 @@
+nimTitle	tabview	tabview.html	module src/tabview		0
+nim	mount	tabview.html#mount.e,,Context[State]	method mount(node: nw.Node; ctx: var Context[State])		10
+nim	render	tabview.html#render.e,,Context[State]	method render(node: nw.Node; ctx: var Context[State])		13
+nim	unmount	tabview.html#unmount.e,,Context[State]	method unmount(node: nw.Node; ctx: var Context[State])		16
+nim	renderRoot	tabview.html#renderRoot,,Context[State]	proc renderRoot(node: nw.Node; ctx: var Context[State])		19
+nim	getMounted	tabview.html#getMounted,T,Context[State]	proc getMounted[T](node: T; ctx: var Context[State]): T		33
+nim	render	tabview.html#render.e,,Context[State]_2	method render(node: nw.Box; ctx: var Context[State])		50
+nim	render	tabview.html#render.e,,Context[State]_3	method render(node: nw.Scroll; ctx: var Context[State])		104
+nim	render	tabview.html#render.e,,Context[State]_4	method render(node: nw.Text; ctx: var Context[State])		139
+nim	viewTable	tabview.html#viewTable,TableData,string,string,bool	proc viewTable(data: TableData; schemeName: string = "default";\n          filename: string = ""; hasHeader: bool = true)		1315
+nim	viewTabularFile	tabview.html#viewTabularFile,string,string,char,int,string,bool,int	proc viewTabularFile(path: string; schemeName: string = "default";\n                delimiter: char = '\x00'; skipLines: int = 0;\n                skipPrefix: string = ""; hasHeader: bool = true;\n                maxColWidth: int = 20)		1323
+nimgrp	render	tabview.html#render-methods-all	method		13
