@@ -33,6 +33,10 @@ export parser.parseDelimitedStream
 export parser.detectDelimiter
 
 type
+  NumberFormatStyle = object
+    thousandsSep: char
+    decimalSep: char
+
   ColorScheme = object
     activeCellBg: iw.BackgroundColor
     activeCellFg: iw.ForegroundColor
@@ -46,7 +50,7 @@ type
     screenBg: iw.BackgroundColor  # Background for non-rendered screen areas
 
   InputMode = enum
-    imNormal, imCommand, imSearch, imSearchColumn, imFilter, imGraph, imSaveFile, imSaveConfirm
+    imNormal, imCommand, imSearch, imSearchColumn, imFilter, imFreeze, imGraph, imHelp, imSaveFile, imSaveConfirm
 
   GraphEntry = object
     occurrence: string
@@ -76,6 +80,11 @@ type
     graphData: seq[GraphEntry]
     graphColumnName: string
     graphScrollY: int
+    intThousandsGrouping: seq[bool] # Per-column display toggle for INT columns.
+    floatFixedTwoDecimals: seq[bool] # Per-column display toggle for FLOAT columns.
+    numberFormatStyle: NumberFormatStyle
+    helpScrollY: int
+    helpReturnMode: InputMode
     pendingSaveFile: string
     statusMessageTTL: int   # ticks remaining to show a transient status message
 # Safer, explicit color schemes for an illwill-style TUI table viewer.
@@ -98,12 +107,12 @@ let ColorSchemesTable = {
   "bold": ColorScheme(              # high-saturation dark
     activeCellBg: iw.bgYellow,
     activeCellFg: iw.fgBlack,
-    activeRowBg:  iw.bgMagenta,
-    activeRowFg:  iw.fgWhite,
-    activeColBg:  iw.bgBlue,
-    activeColFg:  iw.fgWhite,
+    activeRowBg:  iw.bgCyan,
+    activeRowFg:  iw.fgBlack,
+    activeColBg:  iw.bgCyan,
+    activeColFg:  iw.fgBlack,
     evenRowBg:    iw.bgBlack,
-    oddRowBg:     iw.bgBlue,
+    oddRowBg:     iw.bgBlack,
     normalFg:     iw.fgWhite,
     screenBg:     iw.bgBlack
   ),
@@ -120,14 +129,14 @@ let ColorSchemesTable = {
     screenBg:     iw.bgBlack
   ),
   "dark": ColorScheme(              # cyan accent dark
-    activeCellBg: iw.bgCyan,
+    activeCellBg: iw.bgYellow,
     activeCellFg: iw.fgBlack,
-    activeRowBg:  iw.bgBlack,
-    activeRowFg:  iw.fgCyan,
-    activeColBg:  iw.bgBlack,
-    activeColFg:  iw.fgCyan,
+    activeRowBg:  iw.bgCyan,
+    activeRowFg:  iw.fgBlack,
+    activeColBg:  iw.bgCyan,
+    activeColFg:  iw.fgBlack,
     evenRowBg:    iw.bgBlack,
-    oddRowBg:     iw.bgBlue,
+    oddRowBg:     iw.bgBlack,
     normalFg:     iw.fgWhite,
     screenBg:     iw.bgBlack
   ),
@@ -263,6 +272,42 @@ let ColorSchemesTable = {
 # Color scheme names for rotation
 const ColorSchemeNames = ["default", "bold", "subtle", "dark", "mono", "highContrastLight"]
 
+let HelpLines = @[
+  "TableView Help",
+  "",
+  "Navigation",
+  "  Up/Down or j/k      Move between rows",
+  "  Left/Right          Move between columns",
+  "  PageUp/PageDown     Move by one page",
+  "  Home/End            Jump to top/bottom",
+  "",
+  "Search",
+  "  /                    Search all columns",
+  "  |                    Search active column",
+  "  n / b                Next / previous result",
+  "  r                    Toggle regex mode",
+  "",
+  "Columns and Layout",
+  "  p / o                Increase / decrease active column width",
+  "  h / u                Hide active column / unhide all",
+  "  f                    Freeze (then r/c/u)",
+  "  t                    Toggle header row",
+  "",
+  "Data Actions",
+  "  [ / ]                Sort descending / ascending",
+  "  i / F                Set active column type Int / Float",
+  "  ,                    Toggle thousands separator (INT)",
+  "  .                    Toggle 2 decimals (FLOAT)",
+  "  s                    Save visible table to file",
+  "  g                    Graph view for active column",
+  "  Tab                  Rotate color theme",
+  "",
+  "Other",
+  "  :                    Jump to row number",
+  "  ? or F1              Open this help",
+  "  q                    Quit tableview"
+]
+
 include nimwave/prelude
 
 proc initTUI(ctx: var nw.Context[State], data: TableData, schemeName: string,
@@ -304,6 +349,11 @@ proc initTUI(ctx: var nw.Context[State], data: TableData, schemeName: string,
   ctx.data.graphData = @[]
   ctx.data.graphColumnName = ""
   ctx.data.graphScrollY = 0
+  ctx.data.intThousandsGrouping = newSeq[bool](ctx.data.tableData.columnWidths.len)
+  ctx.data.floatFixedTwoDecimals = newSeq[bool](ctx.data.tableData.columnWidths.len)
+  ctx.data.numberFormatStyle = NumberFormatStyle(thousandsSep: ',', decimalSep: '.')
+  ctx.data.helpScrollY = 0
+  ctx.data.helpReturnMode = imNormal
   ctx.data.statusMessage = "File: " & ctx.data.filename & " | Rows: " & $ctx.data.tableData.rows.len & " | Use arrows to scroll, q to quit"
   ctx.data.filteredRows = @[]
 
@@ -311,7 +361,8 @@ proc deinit() =
   terminal.showCursor()
   iw.deinit()
 
-proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int) =
+proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int,
+                     alignRight: bool = false) =
   ## Render a single table cell with padding
   var displayText = text
   if displayText.runeLen > width:
@@ -319,9 +370,89 @@ proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y:
   else:
     # Pad with spaces
     let padding = width - displayText.runeLen
-    displayText = displayText & " ".repeat(padding)
+    if alignRight:
+      displayText = " ".repeat(padding) & displayText
+    else:
+      displayText = displayText & " ".repeat(padding)
 
   iw.write(ctx.tb, x, y, displayText)
+
+proc renderInterCellGap(ctx: var nw.Context[State], x, y, width: int,
+                        bg: iw.BackgroundColor, fg: iw.ForegroundColor) =
+  ## Paint spacing between adjacent cells with row-level colors.
+  if width <= 0:
+    return
+  iw.setBackgroundColor(ctx.tb, bg)
+  iw.setForegroundColor(ctx.tb, fg)
+  iw.write(ctx.tb, x, y, " ".repeat(width))
+  iw.resetAttributes(ctx.tb)
+
+proc addThousandsSeparator(digits: string, sep: char): string =
+  ## Group an ASCII digit string in 3-digit chunks from the right.
+  if digits.len <= 3:
+    return digits
+
+  let firstGroupLen = (if digits.len mod 3 == 0: 3 else: digits.len mod 3)
+  result = digits[0 ..< firstGroupLen]
+  var idx = firstGroupLen
+  while idx < digits.len:
+    let nextIdx = min(idx + 3, digits.len)
+    result.add(sep)
+    result.add(digits[idx ..< nextIdx])
+    idx = nextIdx
+
+proc formatIntegerCell(raw: string, sep: char): string =
+  ## Format plain signed integers with thousands separators.
+  let value = strutils.strip(raw)
+  if value.len == 0:
+    return raw
+
+  var sign = ""
+  var digits = value
+  if value[0] in {'+', '-'}:
+    sign = $value[0]
+    if value.len == 1:
+      return raw
+    digits = value[1 .. ^1]
+
+  for ch in digits:
+    if ch < '0' or ch > '9':
+      return raw
+
+  return sign & addThousandsSeparator(digits, sep)
+
+proc formatFloatCell(raw: string, decimals: int, decimalSep: char): string =
+  ## Format floating-point values to a fixed decimal precision.
+  let value = strutils.strip(raw)
+  if value.len == 0:
+    return raw
+  try:
+    result = formatFloat(parseFloat(value), ffDecimal, decimals)
+    if decimalSep != '.':
+      result = result.replace(".", $decimalSep)
+  except:
+    result = raw
+
+proc formatCellForDisplay(ctx: nw.Context[State], colIdx: int, raw: string): string =
+  ## Render-time formatting only; source table values remain unchanged.
+  if colIdx >= ctx.data.tableData.columnTypes.len:
+    return raw
+
+  case ctx.data.tableData.columnTypes[colIdx]:
+  of ctInt:
+    if colIdx < ctx.data.intThousandsGrouping.len and ctx.data.intThousandsGrouping[colIdx]:
+      return formatIntegerCell(raw, ctx.data.numberFormatStyle.thousandsSep)
+  of ctFloat:
+    if colIdx < ctx.data.floatFixedTwoDecimals.len and ctx.data.floatFixedTwoDecimals[colIdx]:
+      return formatFloatCell(raw, 2, ctx.data.numberFormatStyle.decimalSep)
+  of ctString:
+    discard
+  return raw
+
+proc activeColumnLabel(data: TableData, colIdx: int): string =
+  if colIdx >= 0 and colIdx < data.headers.len:
+    return data.headers[colIdx]
+  return "Column " & $(colIdx + 1)
 
 proc fillScreenBackground(ctx: var nw.Context[State]) =
   ## Fill the entire screen with the screenBg color
@@ -443,7 +574,14 @@ proc saveTableToFile(ctx: var nw.Context[State], filename: string): string =
   except Exception as e:
     return "Error: " & e.msg
 
+proc renderHelpView(ctx: var nw.Context[State])
+
 proc renderTable(ctx: var nw.Context[State]) =
+  # Safety net: if help mode is active, always render help.
+  if ctx.data.inputMode == imHelp:
+    renderHelpView(ctx)
+    return
+
   # Fill the entire screen with the background color first
   fillScreenBackground(ctx)
 
@@ -487,13 +625,21 @@ proc renderTable(ctx: var nw.Context[State]) =
   # Render headers (always visible at top if not part of frozen rows)
   let headerOffset = if ctx.data.frozenRows > 0: 0 else: 2
   if data.headers.len > 0 and ctx.data.frozenRows == 0:
+    let headerBg = iw.bgBlue
+    let headerFg = iw.fgWhite
     for idx, colIdx in visibleColumns:
       let header = if colIdx < data.headers.len: data.headers[colIdx] else: ""
       let width = if colIdx < data.columnWidths.len: data.columnWidths[colIdx] else: 10
-      iw.setBackgroundColor(ctx.tb, iw.bgBlue)
-      iw.setForegroundColor(ctx.tb, iw.fgWhite)
+      iw.setBackgroundColor(ctx.tb, headerBg)
+      iw.setForegroundColor(ctx.tb, headerFg)
+      if ctx.data.currentSchemeName == "subtle" and colIdx == ctx.data.activeCol:
+        iw.setStyle(ctx.tb, {terminal.styleBright})
       renderTableCell(header, width, ctx, columnXPositions[idx], 0)
       iw.resetAttributes(ctx.tb)
+      if idx + 1 < visibleColumns.len:
+        let gapStart = columnXPositions[idx] + width
+        let gapWidth = columnXPositions[idx + 1] - gapStart
+        renderInterCellGap(ctx, gapStart, 0, gapWidth, headerBg, headerFg)
 
     # Header separator line
     if contentHeight > 1:
@@ -507,13 +653,16 @@ proc renderTable(ctx: var nw.Context[State]) =
     let dataRowIdx = if isFiltered: ctx.data.filteredRows[rowIdx] else: rowIdx
     let row = data.rows[dataRowIdx]
     let isActiveRow = (dataRowIdx == ctx.data.activeRow)
+    let scheme = ctx.data.colorScheme
+    let rowBg = if isActiveRow: scheme.activeRowBg else: iw.bgBlack
+    let rowFg = if isActiveRow: scheme.activeRowFg else: iw.fgWhite
 
     for idx, colIdx in visibleColumns:
         let cell = if colIdx < row.len: row[colIdx] else: ""
+        let displayCell = formatCellForDisplay(ctx, colIdx, cell)
         let width = if colIdx < data.columnWidths.len: data.columnWidths[colIdx] else: 10
         let isActiveCol = (colIdx == ctx.data.activeCol)
         let isActiveCell = isActiveRow and isActiveCol
-        let scheme = ctx.data.colorScheme
         # Set colors, same logic as normal rows
         if isActiveCell:
           iw.setBackgroundColor(ctx.tb, scheme.activeCellBg)
@@ -525,8 +674,16 @@ proc renderTable(ctx: var nw.Context[State]) =
           iw.setBackgroundColor(ctx.tb, iw.bgBlack) # A distinct background for frozen rows
           iw.setForegroundColor(ctx.tb, iw.fgWhite)
 
-        renderTableCell(cell, width, ctx, columnXPositions[idx], screenY)
+        if ctx.data.currentSchemeName == "subtle" and isActiveCol:
+          iw.setStyle(ctx.tb, {terminal.styleBright})
+        let isNumericCol = colIdx < data.columnTypes.len and
+          data.columnTypes[colIdx] in [ctInt, ctFloat]
+        renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, isNumericCol)
         iw.resetAttributes(ctx.tb)
+        if idx + 1 < visibleColumns.len:
+          let gapStart = columnXPositions[idx] + width
+          let gapWidth = columnXPositions[idx + 1] - gapStart
+          renderInterCellGap(ctx, gapStart, screenY, gapWidth, rowBg, rowFg)
 
 
   # Render data rows
@@ -543,15 +700,30 @@ proc renderTable(ctx: var nw.Context[State]) =
     let screenY = rowIdx + rowOffset
     if screenY >= contentHeight: continue
     let isActiveRow = (dataRowIdx == ctx.data.activeRow)
+    let scheme = ctx.data.colorScheme
+    let rowBg = (
+      if isActiveRow:
+        scheme.activeRowBg
+      elif rowIdx mod 2 == 0:
+        scheme.evenRowBg
+      else:
+        scheme.oddRowBg
+    )
+    let rowFg = (
+      if isActiveRow:
+        scheme.activeRowFg
+      else:
+        scheme.normalFg
+    )
 
     for idx, colIdx in visibleColumns:
       let cell = if colIdx < row.len: row[colIdx] else: ""
+      let displayCell = formatCellForDisplay(ctx, colIdx, cell)
       let width = if colIdx < data.columnWidths.len: data.columnWidths[colIdx] else: 10
       let isActiveCol = (colIdx == ctx.data.activeCol)
       let isActiveCell = isActiveRow and isActiveCol
 
       # Set colors based on active state using the color scheme
-      let scheme = ctx.data.colorScheme
       var isSearchMatch = false
       if ctx.data.searchPattern.len > 0 and cell.toLower().contains(ctx.data.searchPattern.toLower()):
         if ctx.data.searchInColumn:
@@ -586,8 +758,16 @@ proc renderTable(ctx: var nw.Context[State]) =
           iw.setBackgroundColor(ctx.tb, scheme.oddRowBg)
         iw.setForegroundColor(ctx.tb, scheme.normalFg)
 
-      renderTableCell(cell, width, ctx, columnXPositions[idx], screenY)
+      if ctx.data.currentSchemeName == "subtle" and isActiveCol:
+        iw.setStyle(ctx.tb, {terminal.styleBright})
+      let isNumericCol = colIdx < data.columnTypes.len and
+        data.columnTypes[colIdx] in [ctInt, ctFloat]
+      renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, isNumericCol)
       iw.resetAttributes(ctx.tb)
+      if idx + 1 < visibleColumns.len:
+        let gapStart = columnXPositions[idx] + width
+        let gapWidth = columnXPositions[idx + 1] - gapStart
+        renderInterCellGap(ctx, gapStart, screenY, gapWidth, rowBg, rowFg)
 
   # Render status bar at bottom
   iw.setBackgroundColor(ctx.tb, iw.bgWhite)
@@ -607,9 +787,10 @@ proc renderTable(ctx: var nw.Context[State]) =
     statusLine = "Save to: " & ctx.data.inputBuffer
   of imSaveConfirm:
     statusLine = "Overwrite '" & ctx.data.pendingSaveFile & "'? (y/n)"
-  of imNormal, imGraph:
+  of imNormal, imFreeze, imGraph, imHelp:
     statusLine = ctx.data.statusMessage
 
+  statusLine.add(" | Theme: " & ctx.data.currentSchemeName)
   statusLine = statusLine & " ".repeat(max(0, termWidth - statusLine.runeLen))
   iw.write(ctx.tb, 0, termHeight - 1, statusLine.runeSubStr(0, termWidth))
   iw.resetAttributes(ctx.tb)
@@ -709,8 +890,52 @@ proc renderGraphView(ctx: var nw.Context[State]) =
   # Render status bar
   iw.setBackgroundColor(ctx.tb, iw.bgWhite)
   iw.setForegroundColor(ctx.tb, iw.fgBlack)
-  let statusLine = "Showing " & $ctx.data.graphData.len & " unique values | Press Esc or q to return"
-  iw.write(ctx.tb, 0, termHeight - 1, statusLine & " ".repeat(max(0, termWidth - statusLine.runeLen)))
+  var statusLine = "Showing " & $ctx.data.graphData.len & " unique values | Press Esc or q to return"
+  statusLine.add(" | Theme: " & ctx.data.currentSchemeName)
+  statusLine = statusLine & " ".repeat(max(0, termWidth - statusLine.runeLen))
+  iw.write(ctx.tb, 0, termHeight - 1, statusLine.runeSubStr(0, termWidth))
+  iw.resetAttributes(ctx.tb)
+
+proc renderHelpView(ctx: var nw.Context[State]) =
+  ## Render scrollable help text.
+  fillScreenBackground(ctx)
+
+  let termWidth = iw.width(ctx.tb)
+  let termHeight = iw.height(ctx.tb)
+  let contentHeight = termHeight - 1 # Reserve last line for status
+  let bodyTop = 1
+  let bodyRows = max(1, contentHeight - bodyTop)
+  let maxScroll = max(0, HelpLines.len - bodyRows)
+  if ctx.data.helpScrollY > maxScroll:
+    ctx.data.helpScrollY = maxScroll
+  if ctx.data.helpScrollY < 0:
+    ctx.data.helpScrollY = 0
+
+  # Title
+  iw.setBackgroundColor(ctx.tb, iw.bgBlue)
+  iw.setForegroundColor(ctx.tb, iw.fgWhite)
+  let title = " Help View "
+  iw.write(ctx.tb, 0, 0, title & " ".repeat(max(0, termWidth - title.runeLen)))
+  iw.resetAttributes(ctx.tb)
+
+  # Body
+  iw.setBackgroundColor(ctx.tb, ctx.data.colorScheme.screenBg)
+  iw.setForegroundColor(ctx.tb, ctx.data.colorScheme.normalFg)
+  for row in 0 ..< bodyRows:
+    let lineIdx = ctx.data.helpScrollY + row
+    if lineIdx >= HelpLines.len:
+      break
+    let line = HelpLines[lineIdx]
+    let clipped = if line.len > termWidth: line[0 ..< termWidth] else: line
+    iw.write(ctx.tb, 0, bodyTop + row, clipped & " ".repeat(max(0, termWidth - clipped.len)))
+  iw.resetAttributes(ctx.tb)
+
+  # Status
+  iw.setBackgroundColor(ctx.tb, iw.bgWhite)
+  iw.setForegroundColor(ctx.tb, iw.fgBlack)
+  var statusLine = "Help. Press Q to return to previous screen"
+  statusLine = statusLine & " ".repeat(max(0, termWidth - statusLine.runeLen))
+  iw.write(ctx.tb, 0, termHeight - 1, statusLine.runeSubStr(0, termWidth))
   iw.resetAttributes(ctx.tb)
 
 proc updateStatusMessage(ctx: var nw.Context[State]) =
@@ -891,6 +1116,13 @@ proc rotateColorScheme(ctx: var nw.Context[State]) =
   ctx.data.colorScheme = ColorSchemesTable[nextSchemeName]
   ctx.data.statusMessage = "Color scheme: " & nextSchemeName
 
+proc enterHelp(ctx: var nw.Context[State], returnMode: InputMode) =
+  ## Enter help view and remember where to return.
+  ctx.data.helpReturnMode = returnMode
+  ctx.data.helpScrollY = 0
+  ctx.data.inputMode = imHelp
+  ctx.data.statusMessage = "Help. Press Q to return to previous screen"
+
 proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
   ## Handle keyboard input. Returns true if should quit.
   let data = ctx.data.tableData
@@ -930,7 +1162,7 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
         applyFilter(ctx)
         ctx.data.activeRow = if ctx.data.filteredRows.len > 0: ctx.data.filteredRows[0] else: 0
 
-      of imNormal, imGraph, imSaveFile, imSaveConfirm:
+      of imNormal, imFreeze, imGraph, imHelp, imSaveFile, imSaveConfirm:
         discard
 
       ctx.data.inputMode = imNormal
@@ -1007,6 +1239,9 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
   # Handle graph mode
   if ctx.data.inputMode == imGraph:
     case key:
+    of iw.Key.QuestionMark, iw.Key.F1, iw.Key(ord('H')):
+      enterHelp(ctx, imGraph)
+      return false
     of iw.Key.Escape, iw.Key(ord('q')), iw.Key(ord('Q')):
       # Exit graph view and return to normal mode
       ctx.data.inputMode = imNormal
@@ -1053,8 +1288,63 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
 
     return false
 
+  # Handle help mode
+  if ctx.data.inputMode == imHelp:
+    let helpBodyRows = max(1, contentHeight - 1)
+    let maxHelpScroll = max(0, HelpLines.len - helpBodyRows)
+    case key:
+    of iw.Key(ord('q')), iw.Key(ord('Q')), iw.Key.Escape:
+      ctx.data.inputMode = ctx.data.helpReturnMode
+    of iw.Key.Down, iw.Key(ord('j')):
+      if ctx.data.helpScrollY < maxHelpScroll:
+        ctx.data.helpScrollY += 1
+    of iw.Key.Up, iw.Key(ord('k')):
+      if ctx.data.helpScrollY > 0:
+        ctx.data.helpScrollY -= 1
+    of iw.Key.PageDown:
+      ctx.data.helpScrollY = min(ctx.data.helpScrollY + helpBodyRows, maxHelpScroll)
+    of iw.Key.PageUp:
+      ctx.data.helpScrollY = max(0, ctx.data.helpScrollY - helpBodyRows)
+    of iw.Key.Home:
+      ctx.data.helpScrollY = 0
+    of iw.Key.End:
+      ctx.data.helpScrollY = maxHelpScroll
+    else:
+      discard
+    return false
+
+  # Handle freeze submenu (non-blocking)
+  if ctx.data.inputMode == imFreeze:
+    case key:
+    of iw.Key(ord('r')), iw.Key(ord('R')):
+      ctx.data.frozenRows = ctx.data.activeRow + 1
+      ctx.data.statusMessage = "Frozen rows: 1.." & $(ctx.data.frozenRows)
+      ctx.data.statusMessageTTL = 140
+      ctx.data.inputMode = imNormal
+    of iw.Key(ord('c')), iw.Key(ord('C')):
+      ctx.data.frozenCols = ctx.data.activeCol + 1
+      ctx.data.statusMessage = "Frozen cols: 1.." & $(ctx.data.frozenCols)
+      ctx.data.statusMessageTTL = 140
+      ctx.data.inputMode = imNormal
+    of iw.Key(ord('u')), iw.Key(ord('U')):
+      ctx.data.frozenRows = 0
+      ctx.data.frozenCols = 0
+      ctx.data.statusMessage = "Unfrozen rows and columns"
+      ctx.data.statusMessageTTL = 140
+      ctx.data.inputMode = imNormal
+    of iw.Key.Escape, iw.Key(ord('q')), iw.Key(ord('Q')):
+      ctx.data.statusMessage = "Freeze cancelled"
+      ctx.data.statusMessageTTL = 100
+      ctx.data.inputMode = imNormal
+    else:
+      discard
+    return false
+
   # Normal mode key bindings
   case key:
+  of iw.Key.QuestionMark, iw.Key.F1, iw.Key(ord('H')):
+    enterHelp(ctx, imNormal)
+
   of iw.Key.Down, iw.Key(ord('j')):
     if ctx.data.activeRow < totalRows - 1:
       let currentIdx = if isFiltered: ctx.data.filteredRows.find(ctx.data.activeRow) else: ctx.data.activeRow
@@ -1189,6 +1479,34 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
     if ctx.data.activeCol < ctx.data.tableData.columnTypes.len:
       ctx.data.tableData.columnTypes[ctx.data.activeCol] = ctFloat
 
+  of iw.Key(ord(',')):
+    # Toggle thousands separator formatting for integer columns.
+    if ctx.data.activeCol < ctx.data.tableData.columnTypes.len and
+       ctx.data.tableData.columnTypes[ctx.data.activeCol] == ctInt and
+       ctx.data.activeCol < ctx.data.intThousandsGrouping.len:
+      ctx.data.intThousandsGrouping[ctx.data.activeCol] = not ctx.data.intThousandsGrouping[ctx.data.activeCol]
+      let mode = if ctx.data.intThousandsGrouping[ctx.data.activeCol]: "ON" else: "OFF"
+      ctx.data.statusMessage = "Thousands separator " & mode & " for " &
+        activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
+      ctx.data.statusMessageTTL = 140
+    else:
+      ctx.data.statusMessage = "Thousands separator toggle works on INT columns only"
+      ctx.data.statusMessageTTL = 120
+
+  of iw.Key(ord('.')):
+    # Toggle fixed two-decimal formatting for float columns.
+    if ctx.data.activeCol < ctx.data.tableData.columnTypes.len and
+       ctx.data.tableData.columnTypes[ctx.data.activeCol] == ctFloat and
+       ctx.data.activeCol < ctx.data.floatFixedTwoDecimals.len:
+      ctx.data.floatFixedTwoDecimals[ctx.data.activeCol] = not ctx.data.floatFixedTwoDecimals[ctx.data.activeCol]
+      let mode = if ctx.data.floatFixedTwoDecimals[ctx.data.activeCol]: "ON" else: "OFF"
+      ctx.data.statusMessage = "Fixed 2-decimal format " & mode & " for " &
+        activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
+      ctx.data.statusMessageTTL = 140
+    else:
+      ctx.data.statusMessage = "2-decimal toggle works on FLOAT columns only"
+      ctx.data.statusMessageTTL = 120
+
   of iw.Key(ord('[')):
     # Sort descending
     sortTable(ctx, false)
@@ -1203,22 +1521,9 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
     ctx.data.statusMessage = "Regex search " & mode
 
   of iw.Key(ord('f')):
-    # Freeze row/col submenu might be better
-    ctx.data.statusMessage = "Freeze: (r)ow, (c)ol, (u)nfreeze"
-    # This is a bit of a hack. We need to get another key.
-    # A proper implementation would have a state for this.
-    var mouseInfo: iw.MouseInfo
-    let nextKey = iw.getKey(mouseInfo)
-    case nextKey
-    of iw.Key(ord('r')):
-      ctx.data.frozenRows = ctx.data.activeRow + 1
-    of iw.Key(ord('c')):
-      ctx.data.frozenCols = ctx.data.activeCol + 1
-    of iw.Key(ord('u')):
-      ctx.data.frozenRows = 0
-      ctx.data.frozenCols = 0
-    else:
-      discard
+    # Enter freeze submenu without blocking the event loop.
+    ctx.data.inputMode = imFreeze
+    ctx.data.statusMessage = "Freeze: r=row, c=col, u=unfreeze, Esc=cancel"
 
   of iw.Key(ord('t')):
     # Toggle header - make current first row the header or add artificial header
@@ -1280,7 +1585,7 @@ proc tick(ctx: var nw.Context[State], prevTb: var iw.TerminalBuffer): bool =
 
   # Update status message to reflect current position (only for normal mode,
   # and only once any transient message TTL has expired)
-  if ctx.data.inputMode notin [imGraph, imSaveFile, imSaveConfirm]:
+  if ctx.data.inputMode notin [imFreeze, imGraph, imHelp, imSaveFile, imSaveConfirm]:
     if ctx.data.statusMessageTTL > 0:
       ctx.data.statusMessageTTL -= 1
     else:
@@ -1292,6 +1597,8 @@ proc tick(ctx: var nw.Context[State], prevTb: var iw.TerminalBuffer): bool =
   # Choose which view to render based on input mode
   if ctx.data.inputMode == imGraph:
     renderGraphView(ctx)
+  elif ctx.data.inputMode == imHelp:
+    renderHelpView(ctx)
   else:
     renderTable(ctx)
 
