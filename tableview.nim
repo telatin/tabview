@@ -6,5 +6,4 @@
 ## relative imports inside ``src/tableview.nim``) resolve correctly.
 ## ``include`` resolves relative to *this* file's directory, so
 ## ``src/tableview.nim`` is always found regardless of the working directory.
-{.path: currentSourcePath().parentDir() / "src".}
 include src/tableview
