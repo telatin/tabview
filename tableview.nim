@@ -1,5 +1,10 @@
 ## Compatibility shim: Nimble adds the package root to ``--path`` for
-## dependent projects, so this file makes ``import tableview`` resolve
-## even though the implementation lives in ``src/tableview.nim``.
-import src/tableview as tv
-export tv
+## dependent projects without appending the ``src/`` suffix.
+## This stub makes ``import tableview`` resolve for external projects.
+##
+## ``{.path.}`` adds ``src/`` so that ``import parser`` (and other
+## relative imports inside ``src/tableview.nim``) resolve correctly.
+## ``include`` resolves relative to *this* file's directory, so
+## ``src/tableview.nim`` is always found regardless of the working directory.
+{.path: currentSourcePath().parentDir() / "src".}
+include src/tableview
