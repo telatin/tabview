@@ -8,8 +8,8 @@
 ## - `viewTabularFile <#viewTabularFile,string,string,char,int,string,bool,int>`_
 ##   – launch the viewer directly from a file path or ``"-"`` for stdin.
 ##
-## The `TableData`, `ColumnType`, and parser procedures from `parser`_ are
-## re-exported so callers only need to import this module.
+## The `TableData`, `ColumnType`, and parser procedures from `tableview/parser`_
+## are re-exported so callers only need to import this module.
 
 import os
 import terminal
@@ -24,7 +24,7 @@ when defined(posix):
   import posix
 from illwave as iw import `[]`, `[]=`, `==`
 from nimwave as nw import nil
-import parser
+import tableview/parser
 
 export parser.TableData
 export parser.ColumnType

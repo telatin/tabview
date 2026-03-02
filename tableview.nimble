@@ -1,11 +1,13 @@
 # Package
 
-version       = "0.3.5"
+version       = "0.3.6"
 author        = "Andrea Telatin"
 description   = "TUI table viewer library with interactive sort, search, filter and graph"
 license       = "MIT"
-namedBin      = {"src/tableview_app": "tableview", "src/wordcount_demo": "wordcount"}.toTable()
 binDir        = "bin"
+srcDir        = "src"
+installFiles  = @["tableview.nim", "tableview/parser.nim"]
+namedBin      = {"tableview_app": "tableview", "wordcount_demo": "wordcount"}.toTable()
 
 # Dependencies
 
