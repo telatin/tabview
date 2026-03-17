@@ -29,5 +29,8 @@ jobs:
     - name: Build
       run: nimble build 
 
+    - name: Test
+      run: nimble test
+
     - name: Run help command
       run: ./bin/tableview --help

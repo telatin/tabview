@@ -876,12 +876,13 @@ proc renderGraphView(ctx: var nw.Context[State]) =
     let plot = "*".repeat(min(numStars, plotWidth))
     rowLine.add(plot)
 
-    # Alternate row colors
+    # Alternate row colors (match main table theme)
+    let scheme = ctx.data.colorScheme
     if i mod 2 == 0:
-      iw.setBackgroundColor(ctx.tb, iw.bgNone)
+      iw.setBackgroundColor(ctx.tb, scheme.evenRowBg)
     else:
-      iw.setBackgroundColor(ctx.tb, iw.bgBlack)
-    iw.setForegroundColor(ctx.tb, iw.fgWhite)
+      iw.setBackgroundColor(ctx.tb, scheme.oddRowBg)
+    iw.setForegroundColor(ctx.tb, scheme.normalFg)
 
     iw.write(ctx.tb, 0, currentY, rowLine & " ".repeat(max(0, termWidth - rowLine.runeLen)))
     iw.resetAttributes(ctx.tb)

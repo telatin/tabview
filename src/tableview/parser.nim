@@ -34,7 +34,7 @@ proc detectColumnType(values: seq[string]): ColumnType =
       continue  # Skip empty values
 
     try:
-      let f = parseFloat(val)
+      discard parseFloat(val)
       if '.' in val:
         hasFloat = true
       else:
