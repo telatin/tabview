@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.3.7"
+version       = "0.4.0"
 author        = "Andrea Telatin"
 description   = "TUI table viewer library with interactive sort, search, filter and graph"
 license       = "MIT"
