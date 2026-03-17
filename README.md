@@ -104,7 +104,7 @@ Options:
 | `n` / `b` | Next / previous search match |
 | `r` | Toggle regex search mode |
 | `:N` + Enter | Jump to row N |
-| `[` / `]` | Sort active column descending / ascending |
+| `[` / `]` | Sort active column ascending / descending |
 | `g` | Graph view: value frequencies for active column |
 | `h` / `u` | Hide active column / unhide all columns |
 | `p` / `o` | Widen / narrow active column |

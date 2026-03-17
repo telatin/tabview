@@ -87,6 +87,8 @@ type
     helpReturnMode: InputMode
     pendingSaveFile: string
     statusMessageTTL: int   # ticks remaining to show a transient status message
+    sortedCol: int          # Column index that was last sorted (-1 = none)
+    sortAscending: bool     # Direction of last sort
 # Safer, explicit color schemes for an illwill-style TUI table viewer.
 # All entries avoid bgNone/fgDefault so they look consistent across terminals.
 
@@ -294,7 +296,7 @@ let HelpLines = @[
   "  t                    Toggle header row",
   "",
   "Data Actions",
-  "  [ / ]                Sort descending / ascending",
+  "  [ / ]                Sort ascending / descending",
   "  i / F                Set active column type Int / Float",
   "  ,                    Toggle thousands separator (INT)",
   "  .                    Toggle 2 decimals (FLOAT)",
@@ -354,6 +356,8 @@ proc initTUI(ctx: var nw.Context[State], data: TableData, schemeName: string,
   ctx.data.numberFormatStyle = NumberFormatStyle(thousandsSep: ',', decimalSep: '.')
   ctx.data.helpScrollY = 0
   ctx.data.helpReturnMode = imNormal
+  ctx.data.sortedCol = -1
+  ctx.data.sortAscending = true
   ctx.data.statusMessage = "File: " & ctx.data.filename & " | Rows: " & $ctx.data.tableData.rows.len & " | Use arrows to scroll, q to quit"
   ctx.data.filteredRows = @[]
 
@@ -362,11 +366,12 @@ proc deinit() =
   iw.deinit()
 
 proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int,
-                     alignRight: bool = false) =
+                     alignRight: bool = false, truncSuffix: string = "...") =
   ## Render a single table cell with padding
   var displayText = text
   if displayText.runeLen > width:
-    displayText = displayText.runeSubStr(0, width - 3) & "..."
+    let suffixLen = truncSuffix.runeLen
+    displayText = displayText.runeSubStr(0, width - suffixLen) & truncSuffix
   else:
     # Pad with spaces
     let padding = width - displayText.runeLen
@@ -628,13 +633,22 @@ proc renderTable(ctx: var nw.Context[State]) =
     let headerBg = iw.bgBlue
     let headerFg = iw.fgWhite
     for idx, colIdx in visibleColumns:
-      let header = if colIdx < data.headers.len: data.headers[colIdx] else: ""
+      let baseHeader = if colIdx < data.headers.len: data.headers[colIdx] else: ""
+      let isSorted = ctx.data.sortedCol == colIdx
+      let header = if isSorted:
+                     baseHeader & (if ctx.data.sortAscending: " ↑" else: " ↓")
+                   else:
+                     baseHeader
+      let truncSuffix = if isSorted:
+                          (if ctx.data.sortAscending: "..↑" else: "..↓")
+                        else:
+                          "..."
       let width = if colIdx < data.columnWidths.len: data.columnWidths[colIdx] else: 10
       iw.setBackgroundColor(ctx.tb, headerBg)
       iw.setForegroundColor(ctx.tb, headerFg)
       if ctx.data.currentSchemeName == "subtle" and colIdx == ctx.data.activeCol:
         iw.setStyle(ctx.tb, {terminal.styleBright})
-      renderTableCell(header, width, ctx, columnXPositions[idx], 0)
+      renderTableCell(header, width, ctx, columnXPositions[idx], 0, truncSuffix = truncSuffix)
       iw.resetAttributes(ctx.tb)
       if idx + 1 < visibleColumns.len:
         let gapStart = columnXPositions[idx] + width
@@ -961,6 +975,8 @@ proc sortTable(ctx: var nw.Context[State], ascending: bool) =
   let colIdx = ctx.data.activeCol
   if colIdx >= ctx.data.tableData.columnTypes.len:
     return
+  ctx.data.sortedCol = colIdx
+  ctx.data.sortAscending = ascending
 
   let colType = ctx.data.tableData.columnTypes[colIdx]
 
@@ -1509,12 +1525,12 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       ctx.data.statusMessageTTL = 120
 
   of iw.Key(ord('[')):
-    # Sort descending
-    sortTable(ctx, false)
-
-  of iw.Key(ord(']')):
     # Sort ascending
     sortTable(ctx, true)
+
+  of iw.Key(ord(']')):
+    # Sort descending
+    sortTable(ctx, false)
 
   of iw.Key(ord('r')):
     ctx.data.regexSearch = not ctx.data.regexSearch
