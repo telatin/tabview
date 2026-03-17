@@ -21,4 +21,3 @@ task test, "Run unit tests":
 
 task docs, "Generate HTML documentation into docs/":
   exec "nim doc --project --outdir:docs --index:on src/tableview.nim"
-  exec "cp docs/theindex.html docs/index.html"

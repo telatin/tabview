@@ -7,6 +7,6 @@ nim	getMounted	tableview.html#getMounted,T,Context[State]	proc getMounted[T](nod
 nim	render	tableview.html#render.e,,Context[State]_2	method render(node: nw.Box; ctx: var Context[State])		50
 nim	render	tableview.html#render.e,,Context[State]_3	method render(node: nw.Scroll; ctx: var Context[State])		104
 nim	render	tableview.html#render.e,,Context[State]_4	method render(node: nw.Text; ctx: var Context[State])		139
-nim	viewTable	tableview.html#viewTable,TableData,string,string,bool	proc viewTable(data: TableData; schemeName: string = "default";\n          filename: string = ""; hasHeader: bool = true)		1315
-nim	viewTabularFile	tableview.html#viewTabularFile,string,string,char,int,string,bool,int	proc viewTabularFile(path: string; schemeName: string = "default";\n                delimiter: char = '\x00'; skipLines: int = 0;\n                skipPrefix: string = ""; hasHeader: bool = true;\n                maxColWidth: int = 20)		1323
+nim	viewTable	tableview.html#viewTable,TableData,string,string,bool	proc viewTable(data: TableData; schemeName: string = "default";\n          filename: string = ""; hasHeader: bool = true)		1623
+nim	viewTabularFile	tableview.html#viewTabularFile,string,string,char,int,string,bool,int	proc viewTabularFile(path: string; schemeName: string = "default";\n                delimiter: char = '\x00'; skipLines: int = 0;\n                skipPrefix: string = ""; hasHeader: bool = true;\n                maxColWidth: int = 20)		1631
 nimgrp	render	tableview.html#render-methods-all	method		13
