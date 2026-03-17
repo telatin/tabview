@@ -1,7 +1,12 @@
 # tableview
 
+[![CI](https://github.com/telatin/tabview/actions/workflows/ci.yml/badge.svg)](https://github.com/telatin/tabview/actions/workflows/ci.yml)
+[![pages-build-deployment](https://github.com/telatin/tabview/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/telatin/tabview/actions/workflows/pages/pages-build-deployment)
+
 A Nim library for interactive TUI table viewing, with two demo binaries bundled.
 Other tools can embed the viewer by importing `tableview` and calling `viewTable` or `viewTabularFile`.
+
+![Screenshot](docs/tabview.png)
 
 ## Library API
 
