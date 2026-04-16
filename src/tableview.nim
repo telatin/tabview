@@ -82,6 +82,7 @@ type
     graphScrollY: int
     intThousandsGrouping: seq[bool] # Per-column display toggle for INT columns.
     floatFixedTwoDecimals: seq[bool] # Per-column display toggle for FLOAT columns.
+    rightAlignedCols: seq[bool]      # Per-column right-alignment override.
     numberFormatStyle: NumberFormatStyle
     helpScrollY: int
     helpReturnMode: InputMode
@@ -300,6 +301,7 @@ let HelpLines = @[
   "  i / F                Set active column type Int / Float",
   "  ,                    Toggle thousands separator (INT/FLOAT)",
   "  .                    Toggle 2 decimals (FLOAT)",
+  "  \\                    Toggle right-alignment for active column",
   "  s                    Save visible table to file",
   "  g                    Graph view for active column",
   "  Tab                  Rotate color theme",
@@ -353,6 +355,7 @@ proc initTUI(ctx: var nw.Context[State], data: TableData, schemeName: string,
   ctx.data.graphScrollY = 0
   ctx.data.intThousandsGrouping = newSeq[bool](ctx.data.tableData.columnWidths.len)
   ctx.data.floatFixedTwoDecimals = newSeq[bool](ctx.data.tableData.columnWidths.len)
+  ctx.data.rightAlignedCols = newSeq[bool](ctx.data.tableData.columnWidths.len)
   ctx.data.numberFormatStyle = NumberFormatStyle(thousandsSep: ',', decimalSep: '.')
   ctx.data.helpScrollY = 0
   ctx.data.helpReturnMode = imNormal
@@ -371,7 +374,11 @@ proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y:
   var displayText = text
   if displayText.runeLen > width:
     let suffixLen = truncSuffix.runeLen
-    displayText = displayText.runeSubStr(0, width - suffixLen) & truncSuffix
+    if alignRight:
+      let keepLen = width - suffixLen
+      displayText = truncSuffix & displayText.runeSubStr(displayText.runeLen - keepLen, keepLen)
+    else:
+      displayText = displayText.runeSubStr(0, width - suffixLen) & truncSuffix
   else:
     # Pad with spaces
     let padding = width - displayText.runeLen
@@ -681,7 +688,8 @@ proc renderTable(ctx: var nw.Context[State]) =
       iw.setForegroundColor(ctx.tb, headerFg)
       if ctx.data.currentSchemeName == "subtle" and colIdx == ctx.data.activeCol:
         iw.setStyle(ctx.tb, {terminal.styleBright})
-      renderTableCell(header, width, ctx, columnXPositions[idx], 0, truncSuffix = truncSuffix)
+      let headerAlignRight = colIdx < ctx.data.rightAlignedCols.len and ctx.data.rightAlignedCols[colIdx]
+      renderTableCell(header, width, ctx, columnXPositions[idx], 0, headerAlignRight, truncSuffix = truncSuffix)
       iw.resetAttributes(ctx.tb)
       if idx + 1 < visibleColumns.len:
         let gapStart = columnXPositions[idx] + width
@@ -725,7 +733,9 @@ proc renderTable(ctx: var nw.Context[State]) =
           iw.setStyle(ctx.tb, {terminal.styleBright})
         let isNumericCol = colIdx < data.columnTypes.len and
           data.columnTypes[colIdx] in [ctInt, ctFloat]
-        renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, isNumericCol)
+        let alignRight = isNumericCol or
+          (colIdx < ctx.data.rightAlignedCols.len and ctx.data.rightAlignedCols[colIdx])
+        renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, alignRight)
         iw.resetAttributes(ctx.tb)
         if idx + 1 < visibleColumns.len:
           let gapStart = columnXPositions[idx] + width
@@ -809,7 +819,9 @@ proc renderTable(ctx: var nw.Context[State]) =
         iw.setStyle(ctx.tb, {terminal.styleBright})
       let isNumericCol = colIdx < data.columnTypes.len and
         data.columnTypes[colIdx] in [ctInt, ctFloat]
-      renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, isNumericCol)
+      let alignRight = isNumericCol or
+        (colIdx < ctx.data.rightAlignedCols.len and ctx.data.rightAlignedCols[colIdx])
+      renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, alignRight)
       iw.resetAttributes(ctx.tb)
       if idx + 1 < visibleColumns.len:
         let gapStart = columnXPositions[idx] + width
@@ -1165,6 +1177,7 @@ proc rotateColorScheme(ctx: var nw.Context[State]) =
   ctx.data.currentSchemeName = nextSchemeName
   ctx.data.colorScheme = ColorSchemesTable[nextSchemeName]
   ctx.data.statusMessage = "Color scheme: " & nextSchemeName
+  ctx.data.statusMessageTTL = 140
 
 proc enterHelp(ctx: var nw.Context[State], returnMode: InputMode) =
   ## Enter help view and remember where to return.
@@ -1561,6 +1574,15 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       ctx.data.statusMessage = "2-decimal toggle works on FLOAT columns only"
       ctx.data.statusMessageTTL = 120
 
+  of iw.Key(ord('\\')):
+    # Toggle right-alignment for the active column
+    if ctx.data.activeCol < ctx.data.rightAlignedCols.len:
+      ctx.data.rightAlignedCols[ctx.data.activeCol] = not ctx.data.rightAlignedCols[ctx.data.activeCol]
+      let mode = if ctx.data.rightAlignedCols[ctx.data.activeCol]: "ON" else: "OFF"
+      ctx.data.statusMessage = "Right-align " & mode & " for " &
+        activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
+      ctx.data.statusMessageTTL = 140
+
   of iw.Key(ord('[')):
     # Sort ascending
     sortTable(ctx, true)
@@ -1573,6 +1595,7 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
     ctx.data.regexSearch = not ctx.data.regexSearch
     let mode = if ctx.data.regexSearch: "ON" else: "OFF"
     ctx.data.statusMessage = "Regex search " & mode
+    ctx.data.statusMessageTTL = 140
 
   of iw.Key(ord('f')):
     # Enter freeze submenu without blocking the event loop.
