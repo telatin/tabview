@@ -298,7 +298,7 @@ let HelpLines = @[
   "Data Actions",
   "  [ / ]                Sort ascending / descending",
   "  i / F                Set active column type Int / Float",
-  "  ,                    Toggle thousands separator (INT)",
+  "  ,                    Toggle thousands separator (INT/FLOAT)",
   "  .                    Toggle 2 decimals (FLOAT)",
   "  s                    Save visible table to file",
   "  g                    Graph view for active column",
@@ -426,13 +426,27 @@ proc formatIntegerCell(raw: string, sep: char): string =
 
   return sign & addThousandsSeparator(digits, sep)
 
-proc formatFloatCell(raw: string, decimals: int, decimalSep: char): string =
-  ## Format floating-point values to a fixed decimal precision.
+proc formatFloatCell(raw: string, decimals: int, decimalSep: char, thousandsSep: char = '\0'): string =
+  ## Format floating-point values. decimals=-1 keeps original decimal precision.
   let value = strutils.strip(raw)
   if value.len == 0:
     return raw
   try:
-    result = formatFloat(parseFloat(value), ffDecimal, decimals)
+    let actualDecimals = if decimals >= 0: decimals
+                         else:
+                           let dotPos = value.find('.')
+                           if dotPos >= 0: value.len - dotPos - 1 else: 0
+    result = formatFloat(parseFloat(value), ffDecimal, actualDecimals)
+    if thousandsSep != '\0':
+      let dotPos = result.find('.')
+      let intPart = if dotPos >= 0: result[0 ..< dotPos] else: result
+      let fracPart = if dotPos >= 0: result[dotPos .. ^1] else: ""
+      var sign = ""
+      var digits = intPart
+      if digits.len > 0 and digits[0] in {'+', '-'}:
+        sign = $digits[0]
+        digits = digits[1 .. ^1]
+      result = sign & addThousandsSeparator(digits, thousandsSep) & fracPart
     if decimalSep != '.':
       result = result.replace(".", $decimalSep)
   except:
@@ -448,11 +462,30 @@ proc formatCellForDisplay(ctx: nw.Context[State], colIdx: int, raw: string): str
     if colIdx < ctx.data.intThousandsGrouping.len and ctx.data.intThousandsGrouping[colIdx]:
       return formatIntegerCell(raw, ctx.data.numberFormatStyle.thousandsSep)
   of ctFloat:
-    if colIdx < ctx.data.floatFixedTwoDecimals.len and ctx.data.floatFixedTwoDecimals[colIdx]:
-      return formatFloatCell(raw, 2, ctx.data.numberFormatStyle.decimalSep)
+    let useFixed = colIdx < ctx.data.floatFixedTwoDecimals.len and ctx.data.floatFixedTwoDecimals[colIdx]
+    let useThousands = colIdx < ctx.data.intThousandsGrouping.len and ctx.data.intThousandsGrouping[colIdx]
+    if useFixed or useThousands:
+      let decimals = if useFixed: 2 else: -1
+      let thousandsSep = if useThousands: ctx.data.numberFormatStyle.thousandsSep else: '\0'
+      return formatFloatCell(raw, decimals, ctx.data.numberFormatStyle.decimalSep, thousandsSep)
   of ctString:
     discard
   return raw
+
+proc recalcColumnWidth(ctx: var nw.Context[State], colIdx: int) =
+  ## Expand column width to fit the widest formatted value (header included).
+  ## Only widens; never shrinks.
+  let data = ctx.data.tableData
+  if colIdx >= data.columnWidths.len:
+    return
+  var maxWidth = if colIdx < data.headers.len: data.headers[colIdx].runeLen else: 0
+  for row in data.rows:
+    let cell = if colIdx < row.len: row[colIdx] else: ""
+    let w = formatCellForDisplay(ctx, colIdx, cell).runeLen
+    if w > maxWidth:
+      maxWidth = w
+  if maxWidth > data.columnWidths[colIdx]:
+    ctx.data.tableData.columnWidths[colIdx] = maxWidth
 
 proc activeColumnLabel(data: TableData, colIdx: int): string =
   if colIdx >= 0 and colIdx < data.headers.len:
@@ -1497,17 +1530,19 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       ctx.data.tableData.columnTypes[ctx.data.activeCol] = ctFloat
 
   of iw.Key(ord(',')):
-    # Toggle thousands separator formatting for integer columns.
+    # Toggle thousands separator formatting for INT and FLOAT columns.
     if ctx.data.activeCol < ctx.data.tableData.columnTypes.len and
-       ctx.data.tableData.columnTypes[ctx.data.activeCol] == ctInt and
+       ctx.data.tableData.columnTypes[ctx.data.activeCol] in [ctInt, ctFloat] and
        ctx.data.activeCol < ctx.data.intThousandsGrouping.len:
       ctx.data.intThousandsGrouping[ctx.data.activeCol] = not ctx.data.intThousandsGrouping[ctx.data.activeCol]
       let mode = if ctx.data.intThousandsGrouping[ctx.data.activeCol]: "ON" else: "OFF"
       ctx.data.statusMessage = "Thousands separator " & mode & " for " &
         activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
       ctx.data.statusMessageTTL = 140
+      if ctx.data.intThousandsGrouping[ctx.data.activeCol]:
+        recalcColumnWidth(ctx, ctx.data.activeCol)
     else:
-      ctx.data.statusMessage = "Thousands separator toggle works on INT columns only"
+      ctx.data.statusMessage = "Thousands separator toggle works on INT and FLOAT columns only"
       ctx.data.statusMessageTTL = 120
 
   of iw.Key(ord('.')):
@@ -1520,6 +1555,8 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       ctx.data.statusMessage = "Fixed 2-decimal format " & mode & " for " &
         activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
       ctx.data.statusMessageTTL = 140
+      if ctx.data.floatFixedTwoDecimals[ctx.data.activeCol]:
+        recalcColumnWidth(ctx, ctx.data.activeCol)
     else:
       ctx.data.statusMessage = "2-decimal toggle works on FLOAT columns only"
       ctx.data.statusMessageTTL = 120
