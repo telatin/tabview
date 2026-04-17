@@ -361,19 +361,23 @@ proc deinit() =
   terminal.showCursor()
   iw.deinit()
 
-proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int,
-                     alignRight: bool = false) =
-  ## Render a single table cell with padding
+proc fitCellText(text: string, width: int, alignRight: bool = false): string =
+  ## Clip or pad a cell to target width with optional right alignment.
   var displayText = text
   if displayText.runeLen > width:
-    displayText = displayText.runeSubStr(0, width - 3) & "..."
+    return displayText.runeSubStr(0, width - 3) & "..."
   else:
     # Pad with spaces
     let padding = width - displayText.runeLen
     if alignRight:
-      displayText = " ".repeat(padding) & displayText
+      return " ".repeat(padding) & displayText
     else:
-      displayText = displayText & " ".repeat(padding)
+      return displayText & " ".repeat(padding)
+
+proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int,
+                     alignRight: bool = false) =
+  ## Render a single table cell with padding
+  let displayText = fitCellText(text, width, alignRight)
 
   iw.write(ctx.tb, x, y, displayText)
 
@@ -453,6 +457,17 @@ proc activeColumnLabel(data: TableData, colIdx: int): string =
   if colIdx >= 0 and colIdx < data.headers.len:
     return data.headers[colIdx]
   return "Column " & $(colIdx + 1)
+
+when defined(tableviewTesting):
+  # Pure helper exports for unit tests.
+  proc tvFitCellText*(text: string, width: int, alignRight: bool = false): string =
+    fitCellText(text, width, alignRight)
+  proc tvAddThousandsSeparator*(digits: string, sep: char): string =
+    addThousandsSeparator(digits, sep)
+  proc tvFormatIntegerCell*(raw: string, sep: char): string =
+    formatIntegerCell(raw, sep)
+  proc tvFormatFloatCell*(raw: string, decimals: int, decimalSep: char): string =
+    formatFloatCell(raw, decimals, decimalSep)
 
 proc fillScreenBackground(ctx: var nw.Context[State]) =
   ## Fill the entire screen with the screenBg color

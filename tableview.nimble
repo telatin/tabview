@@ -19,3 +19,6 @@ requires "argparse"
 task docs, "Generate HTML documentation into docs/":
   exec "nim doc --project --outdir:docs --index:on src/tableview.nim"
   exec "cp docs/theindex.html docs/index.html"
+
+task test, "Run unit tests":
+  exec "nim c -r --path:. -d:tableviewTesting tests/test_formatting.nim"
