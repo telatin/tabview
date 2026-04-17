@@ -21,5 +21,5 @@ task docs, "Generate HTML documentation into docs/":
   exec "nim doc --project --outdir:docs --index:on src/tableview.nim"
 
 task test, "Run unit tests":
-  exec "nim c -r --path:. -d:tableviewTesting tests/test_formatting.nim"
-  exec "nim c -r --path:. -d:tableviewTesting tests/test_parser.nim"
+  exec "nim c -r --path:src -d:tableviewTesting tests/test_formatting.nim"
+  exec "nim c -r --path:src -d:tableviewTesting tests/test_parser.nim"
