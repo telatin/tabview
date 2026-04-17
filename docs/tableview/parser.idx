@@ -4,6 +4,6 @@ nim	ctInt	tableview/parser.html#ctInt	ColumnType.ctInt		11
 nim	ctFloat	tableview/parser.html#ctFloat	ColumnType.ctFloat		11
 nim	ColumnType	tableview/parser.html#ColumnType	enum ColumnType		11
 nim	TableData	tableview/parser.html#TableData	object TableData		17
-nim	parseDelimitedFile	tableview/parser.html#parseDelimitedFile,string,char,int,string,bool,int	proc parseDelimitedFile(filename: string; delimiter: char = '\t'; skipLines: int = 0;\n                   skipPrefix: string = ""; hasHeader: bool = true;\n                   maxColWidth: int = 20): TableData		52
-nim	parseDelimitedStream	tableview/parser.html#parseDelimitedStream,Stream,char,int,string,bool,int	proc parseDelimitedStream(stream: Stream; delimiter: char = '\x00';\n                     skipLines: int = 0; skipPrefix: string = "";\n                     hasHeader: bool = true; maxColWidth: int = 20): TableData		116
-nim	detectDelimiter	tableview/parser.html#detectDelimiter,string	proc detectDelimiter(filename: string): char		194
+nim	parseDelimitedFile	tableview/parser.html#parseDelimitedFile,string,char,int,string,bool,int	proc parseDelimitedFile(filename: string; delimiter: char = '\t'; skipLines: int = 0;\n                   skipPrefix: string = ""; hasHeader: bool = true;\n                   maxColWidth: int = 20): TableData		53
+nim	parseDelimitedStream	tableview/parser.html#parseDelimitedStream,Stream,char,int,string,bool,int	proc parseDelimitedStream(stream: Stream; delimiter: char = '\x00';\n                     skipLines: int = 0; skipPrefix: string = "";\n                     hasHeader: bool = true; maxColWidth: int = 20): TableData		117
+nim	detectDelimiter	tableview/parser.html#detectDelimiter,string	proc detectDelimiter(filename: string): char		195
