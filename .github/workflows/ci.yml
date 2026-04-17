@@ -27,7 +27,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
 
     - name: Build
-      run: nimble build 
+      run: nimble build
 
     - name: Tests
       run: nimble test

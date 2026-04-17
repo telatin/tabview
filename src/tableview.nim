@@ -82,11 +82,14 @@ type
     graphScrollY: int
     intThousandsGrouping: seq[bool] # Per-column display toggle for INT columns.
     floatFixedTwoDecimals: seq[bool] # Per-column display toggle for FLOAT columns.
+    rightAlignedCols: seq[bool]      # Per-column right-alignment override.
     numberFormatStyle: NumberFormatStyle
     helpScrollY: int
     helpReturnMode: InputMode
     pendingSaveFile: string
     statusMessageTTL: int   # ticks remaining to show a transient status message
+    sortedCol: int          # Column index that was last sorted (-1 = none)
+    sortAscending: bool     # Direction of last sort
 # Safer, explicit color schemes for an illwill-style TUI table viewer.
 # All entries avoid bgNone/fgDefault so they look consistent across terminals.
 
@@ -294,10 +297,11 @@ let HelpLines = @[
   "  t                    Toggle header row",
   "",
   "Data Actions",
-  "  [ / ]                Sort descending / ascending",
+  "  [ / ]                Sort ascending / descending",
   "  i / F                Set active column type Int / Float",
-  "  ,                    Toggle thousands separator (INT)",
+  "  ,                    Toggle thousands separator (INT/FLOAT)",
   "  .                    Toggle 2 decimals (FLOAT)",
+  "  \\                    Toggle right-alignment for active column",
   "  s                    Save visible table to file",
   "  g                    Graph view for active column",
   "  Tab                  Rotate color theme",
@@ -351,9 +355,12 @@ proc initTUI(ctx: var nw.Context[State], data: TableData, schemeName: string,
   ctx.data.graphScrollY = 0
   ctx.data.intThousandsGrouping = newSeq[bool](ctx.data.tableData.columnWidths.len)
   ctx.data.floatFixedTwoDecimals = newSeq[bool](ctx.data.tableData.columnWidths.len)
+  ctx.data.rightAlignedCols = newSeq[bool](ctx.data.tableData.columnWidths.len)
   ctx.data.numberFormatStyle = NumberFormatStyle(thousandsSep: ',', decimalSep: '.')
   ctx.data.helpScrollY = 0
   ctx.data.helpReturnMode = imNormal
+  ctx.data.sortedCol = -1
+  ctx.data.sortAscending = true
   ctx.data.statusMessage = "File: " & ctx.data.filename & " | Rows: " & $ctx.data.tableData.rows.len & " | Use arrows to scroll, q to quit"
   ctx.data.filteredRows = @[]
 
@@ -361,13 +368,17 @@ proc deinit() =
   terminal.showCursor()
   iw.deinit()
 
-proc fitCellText(text: string, width: int, alignRight: bool = false): string =
+proc fitCellText(text: string, width: int, alignRight: bool = false, truncSuffix: string = "..."): string =
   ## Clip or pad a cell to target width with optional right alignment.
   var displayText = text
   if displayText.runeLen > width:
-    return displayText.runeSubStr(0, width - 3) & "..."
+    let suffixLen = truncSuffix.runeLen
+    if alignRight:
+      let keepLen = width - suffixLen
+      return truncSuffix & displayText.runeSubStr(displayText.runeLen - keepLen, keepLen)
+    else:
+      return displayText.runeSubStr(0, width - suffixLen) & truncSuffix
   else:
-    # Pad with spaces
     let padding = width - displayText.runeLen
     if alignRight:
       return " ".repeat(padding) & displayText
@@ -375,10 +386,9 @@ proc fitCellText(text: string, width: int, alignRight: bool = false): string =
       return displayText & " ".repeat(padding)
 
 proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int,
-                     alignRight: bool = false) =
+                     alignRight: bool = false, truncSuffix: string = "...") =
   ## Render a single table cell with padding
-  let displayText = fitCellText(text, width, alignRight)
-
+  let displayText = fitCellText(text, width, alignRight, truncSuffix)
   iw.write(ctx.tb, x, y, displayText)
 
 proc renderInterCellGap(ctx: var nw.Context[State], x, y, width: int,
@@ -425,13 +435,27 @@ proc formatIntegerCell(raw: string, sep: char): string =
 
   return sign & addThousandsSeparator(digits, sep)
 
-proc formatFloatCell(raw: string, decimals: int, decimalSep: char): string =
-  ## Format floating-point values to a fixed decimal precision.
+proc formatFloatCell(raw: string, decimals: int, decimalSep: char, thousandsSep: char = '\0'): string =
+  ## Format floating-point values. decimals=-1 keeps original decimal precision.
   let value = strutils.strip(raw)
   if value.len == 0:
     return raw
   try:
-    result = formatFloat(parseFloat(value), ffDecimal, decimals)
+    let actualDecimals = if decimals >= 0: decimals
+                         else:
+                           let dotPos = value.find('.')
+                           if dotPos >= 0: value.len - dotPos - 1 else: 0
+    result = formatFloat(parseFloat(value), ffDecimal, actualDecimals)
+    if thousandsSep != '\0':
+      let dotPos = result.find('.')
+      let intPart = if dotPos >= 0: result[0 ..< dotPos] else: result
+      let fracPart = if dotPos >= 0: result[dotPos .. ^1] else: ""
+      var sign = ""
+      var digits = intPart
+      if digits.len > 0 and digits[0] in {'+', '-'}:
+        sign = $digits[0]
+        digits = digits[1 .. ^1]
+      result = sign & addThousandsSeparator(digits, thousandsSep) & fracPart
     if decimalSep != '.':
       result = result.replace(".", $decimalSep)
   except:
@@ -447,11 +471,30 @@ proc formatCellForDisplay(ctx: nw.Context[State], colIdx: int, raw: string): str
     if colIdx < ctx.data.intThousandsGrouping.len and ctx.data.intThousandsGrouping[colIdx]:
       return formatIntegerCell(raw, ctx.data.numberFormatStyle.thousandsSep)
   of ctFloat:
-    if colIdx < ctx.data.floatFixedTwoDecimals.len and ctx.data.floatFixedTwoDecimals[colIdx]:
-      return formatFloatCell(raw, 2, ctx.data.numberFormatStyle.decimalSep)
+    let useFixed = colIdx < ctx.data.floatFixedTwoDecimals.len and ctx.data.floatFixedTwoDecimals[colIdx]
+    let useThousands = colIdx < ctx.data.intThousandsGrouping.len and ctx.data.intThousandsGrouping[colIdx]
+    if useFixed or useThousands:
+      let decimals = if useFixed: 2 else: -1
+      let thousandsSep = if useThousands: ctx.data.numberFormatStyle.thousandsSep else: '\0'
+      return formatFloatCell(raw, decimals, ctx.data.numberFormatStyle.decimalSep, thousandsSep)
   of ctString:
     discard
   return raw
+
+proc recalcColumnWidth(ctx: var nw.Context[State], colIdx: int) =
+  ## Expand column width to fit the widest formatted value (header included).
+  ## Only widens; never shrinks.
+  let data = ctx.data.tableData
+  if colIdx >= data.columnWidths.len:
+    return
+  var maxWidth = if colIdx < data.headers.len: data.headers[colIdx].runeLen else: 0
+  for row in data.rows:
+    let cell = if colIdx < row.len: row[colIdx] else: ""
+    let w = formatCellForDisplay(ctx, colIdx, cell).runeLen
+    if w > maxWidth:
+      maxWidth = w
+  if maxWidth > data.columnWidths[colIdx]:
+    ctx.data.tableData.columnWidths[colIdx] = maxWidth
 
 proc activeColumnLabel(data: TableData, colIdx: int): string =
   if colIdx >= 0 and colIdx < data.headers.len:
@@ -643,13 +686,23 @@ proc renderTable(ctx: var nw.Context[State]) =
     let headerBg = iw.bgBlue
     let headerFg = iw.fgWhite
     for idx, colIdx in visibleColumns:
-      let header = if colIdx < data.headers.len: data.headers[colIdx] else: ""
+      let baseHeader = if colIdx < data.headers.len: data.headers[colIdx] else: ""
+      let isSorted = ctx.data.sortedCol == colIdx
+      let header = if isSorted:
+                     baseHeader & (if ctx.data.sortAscending: " ↑" else: " ↓")
+                   else:
+                     baseHeader
+      let truncSuffix = if isSorted:
+                          (if ctx.data.sortAscending: "..↑" else: "..↓")
+                        else:
+                          "..."
       let width = if colIdx < data.columnWidths.len: data.columnWidths[colIdx] else: 10
       iw.setBackgroundColor(ctx.tb, headerBg)
       iw.setForegroundColor(ctx.tb, headerFg)
       if ctx.data.currentSchemeName == "subtle" and colIdx == ctx.data.activeCol:
         iw.setStyle(ctx.tb, {terminal.styleBright})
-      renderTableCell(header, width, ctx, columnXPositions[idx], 0)
+      let headerAlignRight = colIdx < ctx.data.rightAlignedCols.len and ctx.data.rightAlignedCols[colIdx]
+      renderTableCell(header, width, ctx, columnXPositions[idx], 0, headerAlignRight, truncSuffix = truncSuffix)
       iw.resetAttributes(ctx.tb)
       if idx + 1 < visibleColumns.len:
         let gapStart = columnXPositions[idx] + width
@@ -693,7 +746,9 @@ proc renderTable(ctx: var nw.Context[State]) =
           iw.setStyle(ctx.tb, {terminal.styleBright})
         let isNumericCol = colIdx < data.columnTypes.len and
           data.columnTypes[colIdx] in [ctInt, ctFloat]
-        renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, isNumericCol)
+        let alignRight = isNumericCol or
+          (colIdx < ctx.data.rightAlignedCols.len and ctx.data.rightAlignedCols[colIdx])
+        renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, alignRight)
         iw.resetAttributes(ctx.tb)
         if idx + 1 < visibleColumns.len:
           let gapStart = columnXPositions[idx] + width
@@ -777,7 +832,9 @@ proc renderTable(ctx: var nw.Context[State]) =
         iw.setStyle(ctx.tb, {terminal.styleBright})
       let isNumericCol = colIdx < data.columnTypes.len and
         data.columnTypes[colIdx] in [ctInt, ctFloat]
-      renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, isNumericCol)
+      let alignRight = isNumericCol or
+        (colIdx < ctx.data.rightAlignedCols.len and ctx.data.rightAlignedCols[colIdx])
+      renderTableCell(displayCell, width, ctx, columnXPositions[idx], screenY, alignRight)
       iw.resetAttributes(ctx.tb)
       if idx + 1 < visibleColumns.len:
         let gapStart = columnXPositions[idx] + width
@@ -891,12 +948,13 @@ proc renderGraphView(ctx: var nw.Context[State]) =
     let plot = "*".repeat(min(numStars, plotWidth))
     rowLine.add(plot)
 
-    # Alternate row colors
+    # Alternate row colors (match main table theme)
+    let scheme = ctx.data.colorScheme
     if i mod 2 == 0:
-      iw.setBackgroundColor(ctx.tb, iw.bgNone)
+      iw.setBackgroundColor(ctx.tb, scheme.evenRowBg)
     else:
-      iw.setBackgroundColor(ctx.tb, iw.bgBlack)
-    iw.setForegroundColor(ctx.tb, iw.fgWhite)
+      iw.setBackgroundColor(ctx.tb, scheme.oddRowBg)
+    iw.setForegroundColor(ctx.tb, scheme.normalFg)
 
     iw.write(ctx.tb, 0, currentY, rowLine & " ".repeat(max(0, termWidth - rowLine.runeLen)))
     iw.resetAttributes(ctx.tb)
@@ -975,6 +1033,8 @@ proc sortTable(ctx: var nw.Context[State], ascending: bool) =
   let colIdx = ctx.data.activeCol
   if colIdx >= ctx.data.tableData.columnTypes.len:
     return
+  ctx.data.sortedCol = colIdx
+  ctx.data.sortAscending = ascending
 
   let colType = ctx.data.tableData.columnTypes[colIdx]
 
@@ -1130,6 +1190,7 @@ proc rotateColorScheme(ctx: var nw.Context[State]) =
   ctx.data.currentSchemeName = nextSchemeName
   ctx.data.colorScheme = ColorSchemesTable[nextSchemeName]
   ctx.data.statusMessage = "Color scheme: " & nextSchemeName
+  ctx.data.statusMessageTTL = 140
 
 proc enterHelp(ctx: var nw.Context[State], returnMode: InputMode) =
   ## Enter help view and remember where to return.
@@ -1495,17 +1556,19 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       ctx.data.tableData.columnTypes[ctx.data.activeCol] = ctFloat
 
   of iw.Key(ord(',')):
-    # Toggle thousands separator formatting for integer columns.
+    # Toggle thousands separator formatting for INT and FLOAT columns.
     if ctx.data.activeCol < ctx.data.tableData.columnTypes.len and
-       ctx.data.tableData.columnTypes[ctx.data.activeCol] == ctInt and
+       ctx.data.tableData.columnTypes[ctx.data.activeCol] in [ctInt, ctFloat] and
        ctx.data.activeCol < ctx.data.intThousandsGrouping.len:
       ctx.data.intThousandsGrouping[ctx.data.activeCol] = not ctx.data.intThousandsGrouping[ctx.data.activeCol]
       let mode = if ctx.data.intThousandsGrouping[ctx.data.activeCol]: "ON" else: "OFF"
       ctx.data.statusMessage = "Thousands separator " & mode & " for " &
         activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
       ctx.data.statusMessageTTL = 140
+      if ctx.data.intThousandsGrouping[ctx.data.activeCol]:
+        recalcColumnWidth(ctx, ctx.data.activeCol)
     else:
-      ctx.data.statusMessage = "Thousands separator toggle works on INT columns only"
+      ctx.data.statusMessage = "Thousands separator toggle works on INT and FLOAT columns only"
       ctx.data.statusMessageTTL = 120
 
   of iw.Key(ord('.')):
@@ -1518,22 +1581,34 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       ctx.data.statusMessage = "Fixed 2-decimal format " & mode & " for " &
         activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
       ctx.data.statusMessageTTL = 140
+      if ctx.data.floatFixedTwoDecimals[ctx.data.activeCol]:
+        recalcColumnWidth(ctx, ctx.data.activeCol)
     else:
       ctx.data.statusMessage = "2-decimal toggle works on FLOAT columns only"
       ctx.data.statusMessageTTL = 120
 
-  of iw.Key(ord('[')):
-    # Sort descending
-    sortTable(ctx, false)
+  of iw.Key(ord('\\')):
+    # Toggle right-alignment for the active column
+    if ctx.data.activeCol < ctx.data.rightAlignedCols.len:
+      ctx.data.rightAlignedCols[ctx.data.activeCol] = not ctx.data.rightAlignedCols[ctx.data.activeCol]
+      let mode = if ctx.data.rightAlignedCols[ctx.data.activeCol]: "ON" else: "OFF"
+      ctx.data.statusMessage = "Right-align " & mode & " for " &
+        activeColumnLabel(ctx.data.tableData, ctx.data.activeCol)
+      ctx.data.statusMessageTTL = 140
 
-  of iw.Key(ord(']')):
+  of iw.Key(ord('[')):
     # Sort ascending
     sortTable(ctx, true)
+
+  of iw.Key(ord(']')):
+    # Sort descending
+    sortTable(ctx, false)
 
   of iw.Key(ord('r')):
     ctx.data.regexSearch = not ctx.data.regexSearch
     let mode = if ctx.data.regexSearch: "ON" else: "OFF"
     ctx.data.statusMessage = "Regex search " & mode
+    ctx.data.statusMessageTTL = 140
 
   of iw.Key(ord('f')):
     # Enter freeze submenu without blocking the event loop.

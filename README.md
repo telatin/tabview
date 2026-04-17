@@ -1,7 +1,12 @@
 # tableview
 
+[![CI](https://github.com/telatin/tabview/actions/workflows/ci.yml/badge.svg)](https://github.com/telatin/tabview/actions/workflows/ci.yml)
+[![pages-build-deployment](https://github.com/telatin/tabview/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/telatin/tabview/actions/workflows/pages/pages-build-deployment)
+
 A Nim library for interactive TUI table viewing, with two demo binaries bundled.
 Other tools can embed the viewer by importing `tableview` and calling `viewTable` or `viewTabularFile`.
+
+![Screenshot](docs/tabview.png)
 
 ## Library API
 
@@ -99,7 +104,7 @@ Options:
 | `n` / `b` | Next / previous search match |
 | `r` | Toggle regex search mode |
 | `:N` + Enter | Jump to row N |
-| `[` / `]` | Sort active column descending / ascending |
+| `[` / `]` | Sort active column ascending / descending |
 | `g` | Graph view: value frequencies for active column |
 | `h` / `u` | Hide active column / unhide all columns |
 | `p` / `o` | Widen / narrow active column |

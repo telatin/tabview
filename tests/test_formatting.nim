@@ -23,4 +23,4 @@ suite "tableview numeric formatting":
   test "cell text fitting supports right alignment":
     check tvFitCellText("12", 5) == "12   "
     check tvFitCellText("12", 5, true) == "   12"
-    check tvFitCellText("abcdef", 5, true) == "ab..."
+    check tvFitCellText("abcdef", 5, true) == "...ef"

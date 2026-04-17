@@ -30,12 +30,13 @@ proc detectColumnType(values: seq[string]): ColumnType =
   var hasInt = false
 
   for val in values:
-    if strutils.strip(val).len == 0:
+    let stripped = strutils.strip(val)
+    if stripped.len == 0:
       continue  # Skip empty values
 
     try:
-      let f = parseFloat(val)
-      if '.' in val:
+      discard parseFloat(stripped)
+      if '.' in stripped:
         hasFloat = true
       else:
         hasInt = true
