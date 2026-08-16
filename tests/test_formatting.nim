@@ -24,3 +24,12 @@ suite "tableview numeric formatting":
     check tvFitCellText("12", 5) == "12   "
     check tvFitCellText("12", 5, true) == "   12"
     check tvFitCellText("abcdef", 5, true) == "...ef"
+
+  test "cell text fitting clamps narrow widths instead of overflowing":
+    check tvFitCellText("abcdefghij", 3) == "..."
+    check tvFitCellText("abcdefghij", 2) == ".."
+    check tvFitCellText("abcdefghij", 1) == "."
+    check tvFitCellText("abcdefghij", 3, true) == "..."
+    check tvFitCellText("abcdefghij", 2, true) == ".."
+    check tvFitCellText("abcdefghij", 1, true) == "."
+    check tvFitCellText("abcdefghij", 0) == ""

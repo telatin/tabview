@@ -370,20 +370,21 @@ proc deinit() =
 
 proc fitCellText(text: string, width: int, alignRight: bool = false, truncSuffix: string = "..."): string =
   ## Clip or pad a cell to target width with optional right alignment.
-  var displayText = text
-  if displayText.runeLen > width:
-    let suffixLen = truncSuffix.runeLen
+  if width <= 0:
+    return ""
+  if text.runeLen <= width:
+    let padding = width - text.runeLen
     if alignRight:
-      let keepLen = width - suffixLen
-      return truncSuffix & displayText.runeSubStr(displayText.runeLen - keepLen, keepLen)
+      return " ".repeat(padding) & text
     else:
-      return displayText.runeSubStr(0, width - suffixLen) & truncSuffix
+      return text & " ".repeat(padding)
+
+  let suffixLen = min(truncSuffix.runeLen, width)
+  let keepLen = width - suffixLen
+  if alignRight:
+    return truncSuffix.runeSubStr(0, suffixLen) & text.runeSubStr(text.runeLen - keepLen, keepLen)
   else:
-    let padding = width - displayText.runeLen
-    if alignRight:
-      return " ".repeat(padding) & displayText
-    else:
-      return displayText & " ".repeat(padding)
+    return text.runeSubStr(0, keepLen) & truncSuffix.runeSubStr(0, suffixLen)
 
 proc renderTableCell(text: string, width: int, ctx: var nw.Context[State], x, y: int,
                      alignRight: bool = false, truncSuffix: string = "...") =
@@ -680,9 +681,9 @@ proc renderTable(ctx: var nw.Context[State]) =
 
   let totalRows = if isFiltered: ctx.data.filteredRows.len else: data.rows.len
 
-  # Render headers (always visible at top if not part of frozen rows)
-  let headerOffset = if ctx.data.frozenRows > 0: 0 else: 2
-  if data.headers.len > 0 and ctx.data.frozenRows == 0:
+  # Render headers (always visible at top, even with frozen rows)
+  let headerOffset = if data.headers.len > 0: 2 else: 0
+  if data.headers.len > 0:
     let headerBg = iw.bgBlue
     let headerFg = iw.fgWhite
     for idx, colIdx in visibleColumns:
