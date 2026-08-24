@@ -380,9 +380,9 @@ proc fitCellText(text: string, width: int, alignRight: bool = false, truncSuffix
       return text & " ".repeat(padding)
 
   let suffixLen = min(truncSuffix.runeLen, width)
-  let keepLen = width - suffixLen
+  let keepLen = max(0, width - suffixLen)
   if alignRight:
-    return truncSuffix.runeSubStr(0, suffixLen) & text.runeSubStr(text.runeLen - keepLen, keepLen)
+    return truncSuffix.runeSubStr(0, suffixLen) & text.runeSubStr(max(0, text.runeLen - keepLen), keepLen)
   else:
     return text.runeSubStr(0, keepLen) & truncSuffix.runeSubStr(0, suffixLen)
 
@@ -694,9 +694,9 @@ proc renderTable(ctx: var nw.Context[State]) =
                    else:
                      baseHeader
       let truncSuffix = if isSorted:
-                          (if ctx.data.sortAscending: "..↑" else: "..↓")
+                          (if ctx.data.sortAscending: " ↑" else: " ↓")
                         else:
-                          "..."
+                          ""
       let width = if colIdx < data.columnWidths.len: data.columnWidths[colIdx] else: 10
       iw.setBackgroundColor(ctx.tb, headerBg)
       iw.setForegroundColor(ctx.tb, headerFg)
@@ -1247,10 +1247,10 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
 
     of iw.Key.Escape:
       # Cancel input
-      ctx.data.inputMode = imNormal
-      ctx.data.inputBuffer = ""
       if ctx.data.inputMode == imFilter:
         ctx.data.filteredRows = @[] # Clear filter on escape
+      ctx.data.inputMode = imNormal
+      ctx.data.inputBuffer = ""
 
     of iw.Key.Backspace:
       # Delete last character
