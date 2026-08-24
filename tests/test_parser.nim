@@ -83,6 +83,78 @@ suite "parseDelimitedStream - TSV":
     check t.hiddenColumns == @[false, false]
 
 
+suite "parseDelimitedStream - CSV with parsecsv":
+  test "basic CSV with header":
+    let data = "name,age,value\nalice,30,1.5\nbob,25,2.0"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.headers == @["name", "age", "value"]
+    check t.rows.len == 2
+    check t.rows[0] == @["alice", "30", "1.5"]
+    check t.columnTypes == @[ctString, ctInt, ctFloat]
+
+  test "quoted field with embedded comma":
+    let data = "name,description,value\nItem1,\"hello, world\",10\nItem2,\"foo, bar, baz\",20"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.headers == @["name", "description", "value"]
+    check t.rows.len == 2
+    check t.rows[0][1] == "hello, world"
+    check t.rows[1][1] == "foo, bar, baz"
+
+  test "quoted field with embedded newline":
+    let data = "name,note,value\nItem1,\"line1\nline2\",10\nItem2,simple,20"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.headers == @["name", "note", "value"]
+    check t.rows.len == 2
+    check t.rows[0][1] == "line1\nline2"
+    check t.rows[1][1] == "simple"
+
+  test "double-quote escaping inside quoted field":
+    let data = "name,quote\nAlice,\"he said \"\"hello\"\" to me\"\nBob,\"no quotes\""
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.headers == @["name", "quote"]
+    check t.rows.len == 2
+    check t.rows[0][1] == "he said \"hello\" to me"
+    check t.rows[1][1] == "no quotes"
+
+  test "mixed quoted and unquoted fields":
+    let data = "col1,col2,col3\nplain,\"quoted, value\",42\nanother,plain,99"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.headers == @["col1", "col2", "col3"]
+    check t.rows.len == 2
+    check t.rows[0] == @["plain", "quoted, value", "42"]
+    check t.rows[1] == @["another", "plain", "99"]
+
+  test "no header CSV with parsecsv":
+    let data = "alice,30\nbob,25"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',', hasHeader = false)
+    check t.headers == @["Col1", "Col2"]
+    check t.rows.len == 2
+
+  test "skip comment lines via skipPrefix in CSV":
+    let data = "# comment\nname,age\nalice,30"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',', skipPrefix = "#")
+    check t.headers == @["name", "age"]
+    check t.rows.len == 1
+
+  test "blank lines ignored in CSV":
+    let data = "a,b\n1,2\n\n3,4\n\n"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.rows.len == 2
+    check t.rows[0] == @["1", "2"]
+    check t.rows[1] == @["3", "4"]
+
+  test "column widths capped in CSV":
+    let longVal = "\"" & "x".repeat(50) & "\""
+    let data = "col\n" & longVal
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',', maxColWidth = 20)
+    check t.columnWidths[0] == 20
+
+  test "hiddenColumns all false by default in CSV":
+    let data = "a,b\n1,2"
+    let t = parseDelimitedStream(newStringStream(data), delimiter = ',')
+    check t.hiddenColumns == @[false, false]
+
+
 suite "parseDelimitedFile":
   test "TSV file round-trip":
     let path = getTempDir() / "test_tabview.tsv"
@@ -99,6 +171,15 @@ suite "parseDelimitedFile":
     let t = parseDelimitedFile(path, delimiter = ',')
     check t.headers == @["name", "score"]
     check t.rows[1][1] == "87"
+    removeFile(path)
+
+  test "CSV file with quoted fields":
+    let path = getTempDir() / "test_quoted.csv"
+    writeFile(path, "name,desc,val\nAlpha,\"hello, world\",10\nBeta,\"foo \"\"bar\"\" baz\",20")
+    let t = parseDelimitedFile(path, delimiter = ',')
+    check t.headers == @["name", "desc", "val"]
+    check t.rows[0][1] == "hello, world"
+    check t.rows[1][1] == "foo \"bar\" baz"
     removeFile(path)
 
 
