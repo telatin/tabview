@@ -849,7 +849,9 @@ proc renderTable(ctx: var nw.Context[State]) =
   var statusLine = ""
   case ctx.data.inputMode:
   of imCommand:
-    statusLine = ":" & ctx.data.inputBuffer
+    let isFiltered2 = ctx.data.filteredRows.len > 0
+    let totalRows2 = if isFiltered2: ctx.data.filteredRows.len else: ctx.data.tableData.rows.len
+    statusLine = "Jump to row (1.." & $totalRows2 & "): " & ctx.data.inputBuffer
   of imSearch:
     statusLine = "/" & ctx.data.inputBuffer
   of imSearchColumn:
@@ -1217,10 +1219,17 @@ proc handleInput(ctx: var nw.Context[State], key: iw.Key): bool =
       # Execute command or search
       case ctx.data.inputMode:
       of imCommand:
-        # Jump to line number
+        # Jump to line number. Supports negative values:
+        #   1  = first row,  totalRows = last row
+        #   -1 = last row, -totalRows = first row
         try:
-          let lineNum = parseInt(ctx.data.inputBuffer) - 1
-          if lineNum >= 0 and lineNum < totalRows:
+          let raw = parseInt(ctx.data.inputBuffer)
+          let maxRow = totalRows
+          let lineNum =
+            if raw > 0: raw - 1
+            elif raw < 0: maxRow + raw
+            else: -1  # zero is invalid
+          if lineNum >= 0 and lineNum < maxRow:
             ctx.data.activeRow = if isFiltered: ctx.data.filteredRows[lineNum] else: lineNum
             # Adjust scrolling
             if ctx.data.activeRow < ctx.data.scrollY:
