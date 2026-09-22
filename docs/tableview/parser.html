@@ -16,13 +16,16 @@
 <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA3XAAAN1wFCKJt4AAAAB3RJTUUH4QQQEwksSS9ZWwAAAk1JREFUWMPtll2ITVEUx39nn/O7Y5qR8f05wtCUUr6ZIS++8pEnkZInPImneaCQ5METNdOkeFBKUhMPRIkHKfEuUZSUlGlKPN2TrgfncpvmnntnmlEyq1Z7t89/rf9a6+y99oZxGZf/XeIq61EdtgKXgdXA0xrYAvBjOIF1AI9zvjcC74BSpndrJPkBWDScTF8Aa4E3wDlgHbASaANmVqlcCnwHvgDvgVfAJ+AikAAvgfVZwLnSVZHZaOuKoQi3ZOMi4NkYkpe1p4J7A8BpYAD49hfIy/oqG0+hLomiKP2L5L+1ubn5115S+3OAn4EnwBlgMzCjyt6ZAnQCJ4A7wOs88iRJHvw50HoujuPBoCKwHWiosy8MdfZnAdcHk8dxXFJ3VQbQlCTJvRBCGdRbD4M6uc5glpY3eAihpN5S5w12diSEcCCEcKUO4ljdr15T76ur1FDDLIQQ3qv71EdDOe3Kxj3leRXyk+pxdWnFWod6Wt2bY3de3aSuUHcPBVimHs7mK9WrmeOF6lR1o9qnzskh2ar2qm1qizpfXaPeVGdlmGN5pb09qMxz1Xb1kLqgzn1RyH7JUXW52lr5e/Kqi9qpto7V1atuUzfnARrV7jEib1T76gG2qxdGmXyiekkt1GswPTtek0aBfJp6YySGBfWg2tPQ0FAYgf1stUfdmdcjarbYJEniKIq6gY/Aw+zWHAC+p2labGpqiorFYgGYCEzN7oQdQClN07O1/EfDyGgC0ALMBdYAi4FyK+4H3gLPsxfR1zRNi+NP7nH5J+QntnXe5B5mpfQAAAAASUVORK5CYII=">
 
 <!-- CSS -->
-<link rel="stylesheet" type="text/css" href="../nimdoc.out.css?v=2.2.4">
+<link rel="stylesheet" type="text/css" href="../nimdoc.out.css?v=2.2.12">
 
 <!-- JS -->
-<script type="text/javascript" src="../dochack.js?v=2.2.4"></script>
+<script type="text/javascript" src="../dochack.js?v=2.2.12"></script>
 </head>
 <body>
   <div class="document" id="documentId">
+    <input type="checkbox" id="nav-toggle" hidden>
+    <label for="nav-toggle" id="nav-burger">&#9776;</label>
+    <label for="nav-toggle" id="nav-overlay"></label>
     <div class="container">
       <h1 class="title">src/tableview/parser</h1>
       <div class="row">
@@ -107,12 +110,13 @@
     
     <p class="module-desc"><p>Parsing module for tableview.</p>
 <p>Provides CSV/TSV ingestion from files or streams, column-type detection, and the core <tt class="docutils literal"><span class="pre"><span class="Identifier">TableData</span></span></tt> structure used throughout the application.</p>
+<p>CSV files are parsed with <tt class="docutils literal"><span class="pre"><span class="Identifier">std</span><span class="Operator">/</span><span class="Identifier">parsecsv</span></span></tt> for correct handling of quoted fields, embedded delimiters, newlines, and double-quote escaping per RFC 4180. TSV files use a fast split-based parser.</p>
 </p>
     <div class="section" id="7">
   <h1><a class="toc-backref" href="#7">Types</a></h1>
   <dl class="item">
     <div id="ColumnType">
-  <dt><pre><a href="parser.html#ColumnType"><span class="Identifier">ColumnType</span></a> <span class="Other">=</span> <span class="Keyword">enum</span>
+  <dt><pre><a href="#ColumnType"><span class="Identifier">ColumnType</span></a> <span class="Other">=</span> <span class="Keyword">enum</span>
   <span class="Identifier">ctString</span><span class="Other">,</span>                 <span class="Comment">## Column contains arbitrary text values.</span>
   <span class="Identifier">ctInt</span><span class="Other">,</span>                    <span class="Comment">## All non-empty values parse as integers.</span>
   <span class="Identifier">ctFloat</span>                    <span class="Comment">## All non-empty values parse as floating-point numbers.</span></pre></dt>
@@ -123,11 +127,11 @@
   </dd>
 </div>
 <div id="TableData">
-  <dt><pre><a href="parser.html#TableData"><span class="Identifier">TableData</span></a> <span class="Other">=</span> <span class="Keyword">object</span>
+  <dt><pre><a href="#TableData"><span class="Identifier">TableData</span></a> <span class="Other">=</span> <span class="Keyword">object</span>
   <span class="Identifier">headers</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">string</span><span class="Other">]</span>      <span class="Comment">## Column header names (one per column).</span>
   <span class="Identifier">rows</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">string</span><span class="Other">]</span><span class="Other">]</span>    <span class="Comment">## Data rows; each inner seq has one field per column.</span>
   <span class="Identifier">columnWidths</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span>    <span class="Comment">## Rendering widths (capped at `maxColWidth`) per column.</span>
-  <span class="Identifier">columnTypes</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="parser.html#ColumnType"><span class="Identifier">ColumnType</span></a><span class="Other">]</span> <span class="Comment">## Detected type for each column.</span>
+  <span class="Identifier">columnTypes</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="#ColumnType"><span class="Identifier">ColumnType</span></a><span class="Other">]</span> <span class="Comment">## Detected type for each column.</span>
   <span class="Identifier">hiddenColumns</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">bool</span><span class="Other">]</span>  <span class="Comment">## Per-column visibility flag; `true` means hidden.</span></pre></dt>
   <dd>
     
@@ -157,11 +161,12 @@
   <div id="parseDelimitedFile,string,char,int,string,bool,int">
   <dt><pre><span class="Keyword">proc</span> <a href="#parseDelimitedFile%2Cstring%2Cchar%2Cint%2Cstring%2Cbool%2Cint"><span class="Identifier">parseDelimitedFile</span></a><span class="Other">(</span><span class="Identifier">filename</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">delimiter</span><span class="Other">:</span> <span class="Identifier">char</span> <span class="Other">=</span> <span class="CharLit">'\t'</span><span class="Other">;</span>
                         <span class="Identifier">skipLines</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="DecNumber">0</span><span class="Other">;</span> <span class="Identifier">skipPrefix</span><span class="Other">:</span> <span class="Identifier">string</span> <span class="Other">=</span> <span class="StringLit">&quot;&quot;</span><span class="Other">;</span>
-                        <span class="Identifier">hasHeader</span><span class="Other">:</span> <span class="Identifier">bool</span> <span class="Other">=</span> <span class="Identifier">true</span><span class="Other">;</span> <span class="Identifier">maxColWidth</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="DecNumber">20</span><span class="Other">)</span><span class="Other">:</span> <a href="parser.html#TableData"><span class="Identifier">TableData</span></a> {.
-    <span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">IOError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">ReadIOEffect</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">forbids</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span>.}</pre></dt>
+                        <span class="Identifier">hasHeader</span><span class="Other">:</span> <span class="Identifier">bool</span> <span class="Other">=</span> <span class="Identifier">true</span><span class="Other">;</span> <span class="Identifier">maxColWidth</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="DecNumber">20</span><span class="Other">)</span><span class="Other">:</span> <a href="#TableData"><span class="Identifier">TableData</span></a> {.
+    <span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">IOError</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">,</span> <span class="Identifier">CsvError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">ReadIOEffect</span><span class="Other">,</span> <span class="Identifier">WriteIOEffect</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">forbids</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span>.}</pre></dt>
   <dd>
     
-    Parse a TSV or CSV file and return table data with calculated column widths
+    Parse a TSV or CSV file and return table data with calculated column widths. For CSV (delimiter = ','), uses std/parsecsv to handle quoted fields correctly. For TSV (delimiter = 't'), uses a fast split-based parser.
     
   </dd>
 </div>
@@ -171,11 +176,12 @@
   <div id="parseDelimitedStream,Stream,char,int,string,bool,int">
   <dt><pre><span class="Keyword">proc</span> <a href="#parseDelimitedStream%2CStream%2Cchar%2Cint%2Cstring%2Cbool%2Cint"><span class="Identifier">parseDelimitedStream</span></a><span class="Other">(</span><span class="Identifier">stream</span><span class="Other">:</span> <span class="Identifier">Stream</span><span class="Other">;</span> <span class="Identifier">delimiter</span><span class="Other">:</span> <span class="Identifier">char</span> <span class="Other">=</span> <span class="CharLit">'\x00'</span><span class="Other">;</span>
                           <span class="Identifier">skipLines</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="DecNumber">0</span><span class="Other">;</span> <span class="Identifier">skipPrefix</span><span class="Other">:</span> <span class="Identifier">string</span> <span class="Other">=</span> <span class="StringLit">&quot;&quot;</span><span class="Other">;</span>
-                          <span class="Identifier">hasHeader</span><span class="Other">:</span> <span class="Identifier">bool</span> <span class="Other">=</span> <span class="Identifier">true</span><span class="Other">;</span> <span class="Identifier">maxColWidth</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="DecNumber">20</span><span class="Other">)</span><span class="Other">:</span> <a href="parser.html#TableData"><span class="Identifier">TableData</span></a> {.
-    <span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">IOError</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">ReadIOEffect</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">forbids</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span>.}</pre></dt>
+                          <span class="Identifier">hasHeader</span><span class="Other">:</span> <span class="Identifier">bool</span> <span class="Other">=</span> <span class="Identifier">true</span><span class="Other">;</span> <span class="Identifier">maxColWidth</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="DecNumber">20</span><span class="Other">)</span><span class="Other">:</span> <a href="#TableData"><span class="Identifier">TableData</span></a> {.
+    <span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">IOError</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">,</span> <span class="Identifier">CsvError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">ReadIOEffect</span><span class="Other">,</span> <span class="Identifier">WriteIOEffect</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">forbids</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span>.}</pre></dt>
   <dd>
     
-    Parse a TSV or CSV from a stream (e.g., stdin) If delimiter is '0', it will be auto-detected from the first line
+    Parse a TSV or CSV from a stream (e.g., stdin) If delimiter is '0', it will be auto-detected from the first line. For CSV, uses std/parsecsv to handle quoted fields correctly. For TSV, uses a fast split-based parser.
     
   </dd>
 </div>
@@ -191,7 +197,7 @@
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2026-08-24 14:19:35 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2026-09-22 13:26:18 UTC</small>
       </div>
     </div>
   </div>
