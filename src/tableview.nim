@@ -19,7 +19,7 @@ import algorithm
 import strutils
 import streams
 import sequtils
-import re
+import regex
 when defined(posix):
   import posix
 from illwave as iw import `[]`, `[]=`, `==`
@@ -502,6 +502,15 @@ proc activeColumnLabel(data: TableData, colIdx: int): string =
     return data.headers[colIdx]
   return "Column " & $(colIdx + 1)
 
+proc cellMatches(cell: string, pattern: string, regexMode: bool, compiled: Regex2): bool =
+  ## Check whether `cell` matches the search `pattern`.
+  ## In regex mode uses the pre-compiled `compiled` regex (case-sensitive);
+  ## otherwise performs a case-insensitive substring match.
+  if regexMode:
+    cell.contains(compiled)
+  else:
+    pattern.toLower() in cell.toLower()
+
 when defined(tableviewTesting):
   # Pure helper exports for unit tests.
   proc tvFitCellText*(text: string, width: int, alignRight: bool = false): string =
@@ -512,6 +521,22 @@ when defined(tableviewTesting):
     formatIntegerCell(raw, sep)
   proc tvFormatFloatCell*(raw: string, decimals: int, decimalSep: char): string =
     formatFloatCell(raw, decimals, decimalSep)
+  proc tvRegexValid*(pattern: string): bool =
+    ## True if `pattern` compiles with the regex engine.
+    try:
+      discard re2(pattern)
+      true
+    except RegexError:
+      false
+  proc tvCellMatches*(cell, pattern: string, regexMode: bool): bool =
+    ## Same matching semantics as TUI search/filter, compiling per call.
+    if regexMode:
+      try:
+        cell.contains(re2(pattern))
+      except RegexError:
+        false
+    else:
+      cellMatches(cell, pattern, false, default(Regex2))
 
 proc fillScreenBackground(ctx: var nw.Context[State]) =
   ## Fill the entire screen with the screenBg color
@@ -534,18 +559,17 @@ proc applyFilter(ctx: var nw.Context[State]) =
   if ctx.data.searchPattern.len == 0:
     return
 
-  var regex: Regex
+  var compiled: Regex2
   if ctx.data.regexSearch:
     try:
-      regex = re(ctx.data.searchPattern)
-    except:
+      compiled = re2(ctx.data.searchPattern)
+    except RegexError:
       ctx.data.statusMessage = "Invalid Regex for filter"
       return
 
   for i, row in ctx.data.tableData.rows:
     for cell in row:
-      if (ctx.data.regexSearch and cell.find(regex) != -1) or
-         (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in cell.toLower()):
+      if cellMatches(cell, ctx.data.searchPattern, ctx.data.regexSearch, compiled):
         ctx.data.filteredRows.add(i)
         break # next row
 
@@ -1073,11 +1097,11 @@ proc searchNext(ctx: var nw.Context[State]): bool =
   if ctx.data.searchPattern.len == 0:
     return false
 
-  var regex: Regex
+  var compiled: Regex2
   if ctx.data.regexSearch:
     try:
-      regex = re(ctx.data.searchPattern)
-    except:
+      compiled = re2(ctx.data.searchPattern)
+    except RegexError:
       ctx.data.statusMessage = "Invalid Regex"
       return false
 
@@ -1090,16 +1114,14 @@ proc searchNext(ctx: var nw.Context[State]): bool =
     if ctx.data.searchInColumn:
       # Search in active column only
       if ctx.data.activeCol < row.len:
-        if (ctx.data.regexSearch and row[ctx.data.activeCol].find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in row[ctx.data.activeCol].toLower()):
+        if cellMatches(row[ctx.data.activeCol], ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
     else:
       # Search in all columns
       for cell in row:
-        if (ctx.data.regexSearch and cell.find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in cell.toLower()):
+        if cellMatches(cell, ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
@@ -1110,15 +1132,13 @@ proc searchNext(ctx: var nw.Context[State]): bool =
 
     if ctx.data.searchInColumn:
       if ctx.data.activeCol < row.len:
-        if (ctx.data.regexSearch and row[ctx.data.activeCol].find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in row[ctx.data.activeCol].toLower()):
+        if cellMatches(row[ctx.data.activeCol], ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
     else:
       for cell in row:
-        if (ctx.data.regexSearch and cell.find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in cell.toLower()):
+        if cellMatches(cell, ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
@@ -1130,11 +1150,11 @@ proc searchPrev(ctx: var nw.Context[State]): bool =
   if ctx.data.searchPattern.len == 0:
     return false
 
-  var regex: Regex
+  var compiled: Regex2
   if ctx.data.regexSearch:
     try:
-      regex = re(ctx.data.searchPattern)
-    except:
+      compiled = re2(ctx.data.searchPattern)
+    except RegexError:
       ctx.data.statusMessage = "Invalid Regex"
       return false
 
@@ -1148,15 +1168,13 @@ proc searchPrev(ctx: var nw.Context[State]): bool =
 
     if ctx.data.searchInColumn:
       if ctx.data.activeCol < row.len:
-        if (ctx.data.regexSearch and row[ctx.data.activeCol].find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in row[ctx.data.activeCol].toLower()):
+        if cellMatches(row[ctx.data.activeCol], ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
     else:
       for cell in row:
-        if (ctx.data.regexSearch and cell.find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in cell.toLower()):
+        if cellMatches(cell, ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
@@ -1169,15 +1187,13 @@ proc searchPrev(ctx: var nw.Context[State]): bool =
 
     if ctx.data.searchInColumn:
       if ctx.data.activeCol < row.len:
-        if (ctx.data.regexSearch and row[ctx.data.activeCol].find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in row[ctx.data.activeCol].toLower()):
+        if cellMatches(row[ctx.data.activeCol], ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true
     else:
       for cell in row:
-        if (ctx.data.regexSearch and cell.find(regex) != -1) or
-           (not ctx.data.regexSearch and ctx.data.searchPattern.toLower() in cell.toLower()):
+        if cellMatches(cell, ctx.data.searchPattern, ctx.data.regexSearch, compiled):
           ctx.data.activeRow = rowIdx
           ctx.data.lastSearchRow = rowIdx
           return true

@@ -114,6 +114,11 @@ Options:
 | Tab | Cycle color schemes |
 | `q` / `Q` | Quit |
 
+Regex mode uses [nim-regex](https://github.com/nitely/nim-regex), a pure-Nim
+engine with PCRE-like syntax and linear matching time (no libpcre required).
+Note that backreferences and other constructs incompatible with those
+guarantees are not supported; invalid patterns are reported in the status bar.
+
 ## Building
 
 ```bash
@@ -125,3 +130,4 @@ nimble build        # produces bin/tableview and bin/wordcount
 - [nimwave](https://github.com/nicowillis/nimwave) — TUI rendering framework
 - [illwave](https://github.com/nicowillis/illwave) — low-level terminal library
 - [argparse](https://github.com/iffy/nim-argparse) — command-line argument parsing
+- [regex](https://github.com/nitely/nim-regex) — pure-Nim regular expressions (search/filter)

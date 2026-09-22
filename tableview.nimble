@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.5.3"
+version       = "0.6.0"
 author        = "Andrea Telatin"
 description   = "TUI table viewer library with interactive sort, search, filter and graph"
 license       = "MIT"
@@ -15,6 +15,7 @@ requires "nim >= 2.0.0"
 requires "nimwave"
 requires "illwave"
 requires "argparse"
+requires "regex >= 0.20.0"
 
 
 task docs, "Generate HTML documentation into docs/":
@@ -23,3 +24,4 @@ task docs, "Generate HTML documentation into docs/":
 task test, "Run unit tests":
   exec "nim c -r --path:src -d:tableviewTesting tests/test_formatting.nim"
   exec "nim c -r --path:src -d:tableviewTesting tests/test_parser.nim"
+  exec "nim c -r --path:src -d:tableviewTesting tests/test_regex.nim"
